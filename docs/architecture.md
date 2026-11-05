@@ -66,6 +66,20 @@ sequenceDiagram
   end
 ```
 
+### How the work reaches the VM
+
+`localci` never watches pushes and never touches code. GitHub decides which jobs go to which runner, and the runner in the VM fetches everything else itself:
+
+| What | How it gets there | Where it lives in the VM |
+|---|---|---|
+| Job definition | Part of the job message: steps already parsed from the YAML, the SHA, variables, the secrets the job references, a short-lived `GITHUB_TOKEN` scoped to the repo and run | runner memory |
+| Actions (`uses:`) | Downloaded by the runner, pinned to a commit (`Download action repository …` in the job log) | `~/actions-runner/_work/_actions` |
+| Source code | The `actions/checkout` step fetches the exact SHA using `GITHUB_TOKEN`. Without that step there is no code | `~/actions-runner/_work/<repo>/<repo>` |
+| Toolchain | `setup-go` and similar actions download it | `~/actions-runner/_work/_tool`, kept between jobs (the warm-run speedup) |
+| Results | The runner streams the log, and the step's exit code decides whether the check is green or red | — |
+
+`localci` only fetches the JIT registration config and passes it to the runner through stdin. The VM has no host mounts, so files on the Mac never take part.
+
 ## Routing
 
 ```mermaid
