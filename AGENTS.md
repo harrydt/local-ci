@@ -2,6 +2,8 @@
 
 LocalCI runs a repo's existing GitHub Actions jobs on the developer's Apple Silicon Mac and lets GitHub report the green or red check. Full product brief: `docs/brief.md`.
 
+**Start here:** `docs/progress.md` has the current state, open decisions and next tasks. Add an entry to it at the end of every work session.
+
 ## Architecture (Phase 1)
 
 A single Go binary manages a Lima ARM64 Ubuntu VM and keeps one **ephemeral JIT self-hosted runner** (GitHub's official `actions/runner`) registered in it, labelled `localci-<user>`. GitHub sends jobs to it, the runner executes them, and GitHub produces the real job check run. LocalCI has no backend, no GitHub App and no Checks API code. See `docs/architecture.md` and ADR `docs/decisions/0001-native-self-hosted-runner.md`.
@@ -18,7 +20,8 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 - `internal/github/`: REST client for JIT runner config and deleting runners (stdlib `net/http`)
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256)
-- `examples/go-hello/`: POC target workflow
+- `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
+- Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench)
 - `docs/`: architecture, roadmap, security, ADRs (`decisions/`), research notes (`research/`)
 
 ## Requirements
@@ -45,10 +48,10 @@ make check   # vet + test + gofmt check; run before committing
 4. Push, then verify:
    `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
    The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
-5. To see a red check: break a test (for `examples/go-hello`, change `want` to 5), push, and run step 4 again. Expect `failure`.
-6. To benchmark: `scripts/bench.sh <owner/repo>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for the same commit.
+5. To see a red check: break a test (in `localci-bench`, change `want` to 5 in `cases/go-cpu/hello_test.go`), push, and run step 4 again. Expect `failure`.
+6. To benchmark: `scripts/bench.sh <owner/repo> <workflow.yml>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for the same commit.
 
-The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of `examples/go-hello`.
+The reference target is `TeepLabs/localci-bench`, which already has `LOCALCI_RUNNERS` set for `harrydt`. Add your own login to it.
 
 ## Conventions
 
@@ -67,13 +70,7 @@ The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of 
 
 ## Status
 
-- [x] Research and architecture decision (ADR 0001)
-- [x] Scaffold: CLI, logging, Makefile, docs
-- [x] Manual spike: runner in a Lima VM, green and red check verified (`docs/research/001-native-runner-spike.md`)
-- [x] `internal/github`: JIT config and delete-runner client
-- [x] `internal/runner` + `localci up`: VM start, ephemeral runner loop, cleanup on shutdown. Green and red checks verified end to end
-- [x] PR events and benchmark (hosted vs local cold/warm): `scripts/bench.sh`, `docs/research/002-phase1-validation.md`
-- [ ] Docker in the VM (pending decision)
+Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
 
 ## Known limitations
 
@@ -89,4 +86,4 @@ The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of 
 
 ## Working in parallel
 
-Each workmux worktree owns one task. Only the scaffold task edits `go.mod`. Other tasks rebase onto it rather than adding dependencies concurrently.
+Each workmux worktree owns one task from `docs/progress.md`. The task table lists the files each task touches and its likely conflicts. Don't add dependencies to `go.mod` in parallel sessions. Each machine has its own VM, so two sessions on one Mac share the `localci` VM: only one should run `localci up` at a time.

@@ -8,11 +8,12 @@
 # Temporarily rewrites the LOCALCI_RUNNERS repo variable to force the hosted
 # run; the original value is restored on exit.
 #
-# usage: scripts/bench.sh owner/repo [workflow-file] [ref]
+# usage: scripts/bench.sh owner/repo workflow-file [ref]
+#   e.g. scripts/bench.sh TeepLabs/localci-bench go-cpu.yml
 set -euo pipefail
 
-REPO=${1:?usage: bench.sh owner/repo [workflow-file] [ref]}
-WF=${2:-ci.yml}
+REPO=${1:?usage: bench.sh owner/repo workflow-file [ref]}
+WF=${2:?usage: bench.sh owner/repo workflow-file [ref]}
 REF=${3:-main}
 VM=${VM:-localci}
 

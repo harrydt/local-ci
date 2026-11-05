@@ -4,6 +4,28 @@
 
 The developer controls the Mac, the VM, the runner and localci. Anything that runs locally can be observed or altered by them.
 
+```mermaid
+flowchart LR
+  subgraph Trusted["Trusted: GitHub"]
+    A[Actions service]
+    S[(Repo secrets)]
+    C[Check runs]
+  end
+  subgraph Untrusted["Untrusted: developer-controlled"]
+    subgraph Mac[Mac host]
+      L[localci + gh token]
+      subgraph VM["Lima VM (no host mounts)"]
+        R[runner + job code]
+      end
+    end
+  end
+  S -- "secrets the job references" --> R
+  R -- "self-reported result" --> A --> C
+  L -- "repo-admin token" --> A
+```
+
+Everything that crosses into the untrusted box is exposed to the developer, and everything that comes out of it is the developer's word. The VM boundary protects the **developer's** host from job code (that's why there are no host mounts). It does not protect jobs or secrets from the developer.
+
 ## What Phase 1 does **not** guarantee
 
 - **Result integrity.** A local runner can report success for a failing commit. GitHub's branch protection can't tell a self-hosted runner's result from a hosted one. A green check from LocalCI means "this developer's machine says it passed".
