@@ -11,6 +11,13 @@ Full goals per phase: `docs/brief.md` §2.
 
 **Done when:** pushing to the test repo produces green or red job checks on the exact SHA, executed on the Mac, with timings logged.
 
+**Future improvements** (deferred; Phase 1 assumes the laptop is awake and online, see research 002):
+
+- Sleep/wake and network-drop behaviour: test it, and consider `caffeinate -i` during jobs
+- Several runners per `localci up` so jobs run in parallel
+- Run as a launchd agent
+- Host CPU, memory and battery sampling during jobs
+
 ## Phase 2 — Make it secure
 
 Keep protected secrets off local runners (route those jobs to hosted runners). Replace the repo-admin token with a GitHub App or something narrower. Evaluate OIDC.

@@ -46,6 +46,7 @@ make check   # vet + test + gofmt check; run before committing
    `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
    The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
 5. To see a red check: break a test (for `examples/go-hello`, change `want` to 5), push, and run step 4 again. Expect `failure`.
+6. To benchmark: `scripts/bench.sh <owner/repo>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for the same commit.
 
 The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of `examples/go-hello`.
 
@@ -71,7 +72,8 @@ The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of 
 - [x] Manual spike: runner in a Lima VM, green and red check verified (`docs/research/001-native-runner-spike.md`)
 - [x] `internal/github`: JIT config and delete-runner client
 - [x] `internal/runner` + `localci up`: VM start, ephemeral runner loop, cleanup on shutdown. Green and red checks verified end to end
-- [ ] Next: decide on Phase 1 hardening (run as a launchd agent, sleep/wake behaviour, job timing report)
+- [x] PR events and benchmark (hosted vs local cold/warm): `scripts/bench.sh`, `docs/research/002-phase1-validation.md`
+- [ ] Docker in the VM (pending decision)
 
 ## Known limitations
 
@@ -81,6 +83,9 @@ The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of 
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
+- The laptop must be awake and online. Sleep/wake and network drops are untested (`docs/research/002-phase1-validation.md`).
+- One job at a time per `localci up`. Concurrent jobs queue behind each other.
+- No Docker in the VM: `services:`, `container:` and Docker container actions fail.
 
 ## Working in parallel
 
