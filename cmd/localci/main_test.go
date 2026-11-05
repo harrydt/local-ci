@@ -18,6 +18,9 @@ func TestRun(t *testing.T) {
 		{name: "missing command", args: nil, wantErr: "missing command"},
 		{name: "unknown command", args: []string{"nope"}, wantErr: `unknown command "nope"`},
 		{name: "bad log level", args: []string{"-log-level", "loud", "version"}, wantErr: "invalid -log-level"},
+		{name: "up without repo", args: []string{"up", "-label", "l"}, wantErr: "-repo must be owner/name"},
+		{name: "up bad repo", args: []string{"up", "-repo", "a/b/c", "-label", "l"}, wantErr: "-repo must be owner/name"},
+		{name: "up without label", args: []string{"up", "-repo", "o/r"}, wantErr: "-label is required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

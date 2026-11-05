@@ -15,7 +15,10 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 ## Layout
 
 - `cmd/localci/`: CLI entry point, flags, slog setup
-- `internal/`: packages are added only when a vertical slice needs them
+- `internal/github/`: REST client for JIT runner config and deleting runners (stdlib `net/http`)
+- `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
+- `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256)
+- `examples/go-hello/`: POC target workflow
 - `docs/`: architecture, roadmap, security, ADRs (`decisions/`), research notes (`research/`)
 
 ## Requirements
@@ -32,6 +35,19 @@ make build   # bin/localci
 make test    # go test ./...
 make check   # vet + test + gofmt check; run before committing
 ```
+
+## Running the POC
+
+1. `./scripts/setup-vm.sh`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
+2. In the target repo, set `runs-on` as shown above and create a repo variable:
+   `gh variable set LOCALCI_RUNNERS -R <owner/repo> --body '{"<your-login>":"localci-<your-login>"}'`
+3. `bin/localci up -repo <owner/repo> -label localci-<your-login>`. Ctrl-C deregisters the runner.
+4. Push, then verify:
+   `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
+   The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
+5. To see a red check: break a test (for `examples/go-hello`, change `want` to 5), push, and run step 4 again. Expect `failure`.
+
+The reference target is the private repo `TeepLabs/localci-go-hello`, a copy of `examples/go-hello`.
 
 ## Conventions
 
@@ -53,8 +69,9 @@ make check   # vet + test + gofmt check; run before committing
 - [x] Research and architecture decision (ADR 0001)
 - [x] Scaffold: CLI, logging, Makefile, docs
 - [x] Manual spike: runner in a Lima VM, green and red check verified (`docs/research/001-native-runner-spike.md`)
-- [ ] `internal/github`: JIT runner config client
-- [ ] `internal/runner`: VM and ephemeral runner loop, `localci up`
+- [x] `internal/github`: JIT config and delete-runner client
+- [x] `internal/runner` + `localci up`: VM start, ephemeral runner loop, cleanup on shutdown. Green and red checks verified end to end
+- [ ] Next: decide on Phase 1 hardening (run as a launchd agent, sleep/wake behaviour, job timing report)
 
 ## Known limitations
 
@@ -62,6 +79,8 @@ make check   # vet + test + gofmt check; run before committing
 - If the laptop is offline, routed jobs stay queued for up to 24h and then fail. There's no fallback.
 - The VM is ARM64. amd64-only tools and Docker images break or run under emulation.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
+- The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
+- If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 
 ## Working in parallel
 
