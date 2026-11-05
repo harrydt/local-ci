@@ -1,0 +1,17 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    # LocalCI opt-in: actors listed in the LOCALCI_RUNNERS repo variable run on their own machine.
+    runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: where am I
+        run: |
+          echo "sha=${{ github.sha }} head=$(git rev-parse HEAD)"
+          echo "runner=${{ runner.name }} arch=$(uname -m)"
+      - run: go test ./...
