@@ -19,7 +19,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 - `cmd/localci/`: CLI entry point, flags, slog setup
 - `internal/github/`: REST client for JIT runner config and deleting runners (stdlib `net/http`)
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
-- `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256)
+- `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
 - Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench)
 - `docs/`: architecture, roadmap, security, ADRs (`decisions/`), research notes (`research/`)
@@ -41,7 +41,7 @@ make check   # vet + test + gofmt check; run before committing
 
 ## Running the POC
 
-1. `./scripts/setup-vm.sh`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
+1. `bin/localci setup`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
 2. In the target repo, set `runs-on` as shown above and create a repo variable:
    `gh variable set LOCALCI_RUNNERS -R <owner/repo> --body '{"<your-login>":"localci-<your-login>"}'`
 3. `bin/localci up -repo <owner/repo> -label localci-<your-login>`. Add `-runners N` to run N jobs at once. Ctrl-C deregisters the runners.

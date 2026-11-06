@@ -17,6 +17,7 @@ import (
 
 	"github.com/teeplabs/localci/internal/github"
 	"github.com/teeplabs/localci/internal/runner"
+	"github.com/teeplabs/localci/scripts"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
@@ -25,6 +26,7 @@ var version = "dev"
 const usage = `usage: localci [flags] <command>
 
 commands:
+  setup     create the Lima VM and install the runner in it; safe to re-run
   up        run GitHub Actions jobs routed to this machine (localci up -h)
   version   print the localci version
 
@@ -60,6 +62,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "version":
 		fmt.Fprintln(stdout, version)
 		return nil
+	case "setup":
+		return setup(fs.Args()[1:], stderr)
 	case "up":
 		return up(fs.Args()[1:], stderr, logger)
 	case "":
@@ -107,6 +111,25 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	}
 	logger.Info("localci up", "repo", *repo, "label", *label, "vm", *vm, "runners", *runners)
 	return agent.Run(ctx)
+}
+
+func setup(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	vm := fs.String("vm", "localci", "Lima instance name")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cmd := exec.CommandContext(ctx, "bash", "-c", scripts.SetupVM, "setup-vm.sh")
+	cmd.Env = append(os.Environ(), "VM="+*vm)
+	cmd.Stdout, cmd.Stderr = stderr, stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("setup VM %q: %w", *vm, err)
+	}
+	return nil
 }
 
 // githubToken prefers GH_TOKEN and falls back to the gh CLI. The token is

@@ -20,7 +20,7 @@ Requires macOS on Apple Silicon, Go, [Lima](https://lima-vm.io) 2.x and the [Git
 
 ```sh
 make build
-./scripts/setup-vm.sh                         # one-time: VM + runner
+bin/localci setup                             # one-time: VM + runner
 bin/localci up -repo owner/name -label localci-$(gh api user --jq .login)
 ```
 

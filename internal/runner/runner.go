@@ -74,7 +74,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("start VM %q: %w", a.VM, err)
 	}
 	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "test", "-x", "actions-runner/run.sh"); err != nil {
-		return fmt.Errorf("runner not installed in VM %q (run scripts/setup-vm.sh): %w", a.VM, err)
+		return fmt.Errorf("runner not installed in VM %q (run localci setup): %w", a.VM, err)
 	}
 	n := max(a.Runners, 1)
 	if n > 1 {
