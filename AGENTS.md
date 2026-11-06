@@ -44,7 +44,7 @@ make check   # vet + test + gofmt check; run before committing
 1. `./scripts/setup-vm.sh`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
 2. In the target repo, set `runs-on` as shown above and create a repo variable:
    `gh variable set LOCALCI_RUNNERS -R <owner/repo> --body '{"<your-login>":"localci-<your-login>"}'`
-3. `bin/localci up -repo <owner/repo> -label localci-<your-login>`. Ctrl-C deregisters the runner.
+3. `bin/localci up -repo <owner/repo> -label localci-<your-login>`. Add `-runners N` to run N jobs at once. Ctrl-C deregisters the runners.
 4. Push, then verify:
    `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
    The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
@@ -81,7 +81,7 @@ Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - The laptop must be awake and online. Sleep/wake and network drops are untested (`docs/research/002-phase1-validation.md`).
-- One job at a time per `localci up`. Concurrent jobs queue behind each other.
+- `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 
 ## Working in parallel

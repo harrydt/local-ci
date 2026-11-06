@@ -12,7 +12,7 @@ flowchart LR
   VM -- "logs + result" --> GH --> Check["✅ / ❌ check on the commit"]
 ```
 
-**Status:** Phase 1 proof of concept. It works end to end for push and PR events. One job at a time. See the [progress log](docs/progress.md).
+**Status:** Phase 1 proof of concept. It works end to end for push and PR events. Runs one job at a time by default, or N with `-runners N`. See the [progress log](docs/progress.md).
 
 ## Quick start
 

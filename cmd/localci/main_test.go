@@ -21,6 +21,7 @@ func TestRun(t *testing.T) {
 		{name: "up without repo", args: []string{"up", "-label", "l"}, wantErr: "-repo must be owner/name"},
 		{name: "up bad repo", args: []string{"up", "-repo", "a/b/c", "-label", "l"}, wantErr: "-repo must be owner/name"},
 		{name: "up without label", args: []string{"up", "-repo", "o/r"}, wantErr: "-label is required"},
+		{name: "up zero runners", args: []string{"up", "-repo", "o/r", "-label", "l", "-runners", "0"}, wantErr: "-runners must be at least 1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

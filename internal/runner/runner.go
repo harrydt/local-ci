@@ -11,14 +11,35 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/teeplabs/localci/internal/github"
 )
 
 // runScript reads the JIT config from stdin so it never appears in argv on the host.
-const runScript = `read -r c; cd ~/actions-runner && exec ./run.sh --jitconfig "$c"`
+func runScript(dir string) string {
+	return fmt.Sprintf(`read -r c; cd ~/%s && exec ./run.sh --jitconfig "$c"`, dir)
+}
 
+// runnerDir is slot i's runner directory in the VM. A runner writes its
+// credentials and _work into its directory, so parallel runners need one each.
+// Slot 1 keeps the original directory and its warm tool cache.
+func runnerDir(i int) string {
+	if i == 1 {
+		return "actions-runner"
+	}
+	return fmt.Sprintf("actions-runner-%d", i)
+}
+
+// copyScript creates the extra runner directories from the installed one,
+// without its credentials, logs or work tree.
+const copyScript = `for i in $(seq 2 %d); do
+  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
+done`
+
+// ponytail: with Runners > 1 a prune can delete an image another job pulled but
+// hasn't started yet; only near a full disk. Serialize prune with jobs if it bites.
 // pruneScript frees disk when the VM's root filesystem passes 80%. Images,
 // volumes and build cache persist between jobs (warm pulls) until then.
 const pruneScript = `used=$(df --output=pcent / | tail -1 | tr -dc 0-9)
@@ -30,6 +51,7 @@ type Agent struct {
 	GitHub      *github.Client
 	Owner, Repo string
 	Label       string // runner label; must match the routing in LOCALCI_RUNNERS
+	Runners     int    // runners in parallel, one job each; 0 means 1
 	VM          string // Lima instance name
 	Log         *slog.Logger
 
@@ -54,33 +76,50 @@ func (a *Agent) Run(ctx context.Context) error {
 	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "test", "-x", "actions-runner/run.sh"); err != nil {
 		return fmt.Errorf("runner not installed in VM %q (run scripts/setup-vm.sh): %w", a.VM, err)
 	}
+	n := max(a.Runners, 1)
+	if n > 1 {
+		if err := a.limactl(ctx, nil, "shell", a.VM, "--", "bash", "-c", fmt.Sprintf(copyScript, n)); err != nil {
+			return fmt.Errorf("create runner directories in VM %q: %w", a.VM, err)
+		}
+	}
 
+	var wg sync.WaitGroup
+	for i := 1; i <= n; i++ {
+		wg.Go(func() { a.loop(ctx, i) })
+	}
+	wg.Wait()
+	return nil
+}
+
+// loop keeps one runner slot busy until ctx is cancelled.
+func (a *Agent) loop(ctx context.Context, slot int) {
+	log := a.Log.With("slot", slot)
 	for ctx.Err() == nil {
-		if err := a.session(ctx); err != nil {
-			a.Log.Error("runner session failed; retrying", "err", err, "retry_in", a.retryDelay)
+		if err := a.session(ctx, log, slot); err != nil {
+			log.Error("runner session failed; retrying", "err", err, "retry_in", a.retryDelay)
 			select {
 			case <-ctx.Done():
 			case <-time.After(a.retryDelay):
 			}
 		}
 	}
-	return nil
 }
 
 // session registers one ephemeral runner and blocks until it exits.
-func (a *Agent) session(ctx context.Context) error {
-	name := fmt.Sprintf("%s-%d", a.Label, time.Now().UnixNano())
+func (a *Agent) session(ctx context.Context, log *slog.Logger, slot int) error {
+	dir := runnerDir(slot)
+	name := fmt.Sprintf("%s-%d-%d", a.Label, slot, time.Now().UnixNano())
 	start := time.Now()
 	cfg, err := a.GitHub.GenerateJITConfig(ctx, a.Owner, a.Repo, name, []string{a.Label})
 	if err != nil {
 		return fmt.Errorf("generate JIT config: %w", err)
 	}
-	log := a.Log.With("runner", name, "runner_id", cfg.RunnerID)
+	log = log.With("runner", name, "runner_id", cfg.RunnerID)
 	log.Info("runner registered; waiting for job", "register_ms", time.Since(start).Milliseconds())
-	defer a.cleanup(log, cfg.RunnerID)
+	defer a.cleanup(log, dir, cfg.RunnerID)
 
 	start = time.Now()
-	err = a.limactl(ctx, strings.NewReader(cfg.Encoded+"\n"), "shell", a.VM, "--", "bash", "-c", runScript)
+	err = a.limactl(ctx, strings.NewReader(cfg.Encoded+"\n"), "shell", a.VM, "--", "bash", "-c", runScript(dir))
 	log.Info("runner exited", "session_s", int(time.Since(start).Seconds()), "err", err)
 	if ctx.Err() != nil {
 		return nil
@@ -94,15 +133,21 @@ func (a *Agent) session(ctx context.Context) error {
 // cleanup makes sure no listener outlives the session and the registration is
 // gone. Killing limactl does not reliably stop the process inside the VM, and
 // a runner killed before taking a job stays registered on GitHub.
-func (a *Agent) cleanup(log *slog.Logger, runnerID int64) {
+func (a *Agent) cleanup(log *slog.Logger, dir string, runnerID int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cancel()
-	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "bash", "-c", "pkill -f [R]unner.Listener || true"); err != nil {
+	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "bash", "-c", killScript(dir)); err != nil {
 		log.Warn("kill runner in VM", "err", err)
 	}
 	if err := a.GitHub.DeleteRunner(ctx, a.Owner, a.Repo, runnerID); err != nil {
 		log.Warn("delete runner registration", "err", err)
 	}
+}
+
+// killScript stops only dir's listener. The bracket keeps pkill from matching
+// its own bash -c command line.
+func killScript(dir string) string {
+	return fmt.Sprintf("pkill -f '[%c]%s/bin/Runner.Listener' || true", dir[0], dir[1:])
 }
 
 func execLimactl(ctx context.Context, stdin io.Reader, args ...string) error {

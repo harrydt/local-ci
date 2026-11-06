@@ -78,6 +78,7 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	repo := fs.String("repo", "", "GitHub repository as owner/name (required)")
 	label := fs.String("label", "", "runner label, must match this user's entry in LOCALCI_RUNNERS (required)")
 	vm := fs.String("vm", "localci", "Lima instance name")
+	runners := fs.Int("runners", 1, "jobs to run in parallel, each on its own runner in the VM")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -87,6 +88,9 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	}
 	if *label == "" {
 		return errors.New("-label is required")
+	}
+	if *runners < 1 {
+		return fmt.Errorf("-runners must be at least 1, got %d", *runners)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -98,10 +102,10 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	}
 	agent := &runner.Agent{
 		GitHub: github.New(token),
-		Owner:  owner, Repo: name, Label: *label, VM: *vm,
+		Owner:  owner, Repo: name, Label: *label, VM: *vm, Runners: *runners,
 		Log: logger.With("repo", *repo, "label", *label),
 	}
-	logger.Info("localci up", "repo", *repo, "label", *label, "vm", *vm)
+	logger.Info("localci up", "repo", *repo, "label", *label, "vm", *vm, "runners", *runners)
 	return agent.Run(ctx)
 }
 

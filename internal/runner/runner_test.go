@@ -64,7 +64,7 @@ func TestRunLoopsAndCleansUp(t *testing.T) {
 			prunes++
 			mu.Unlock()
 		}
-		if len(args) > 4 && args[4] == "-c" && args[5] == runScript {
+		if len(args) > 5 && args[5] == runScript("actions-runner") {
 			b, _ := io.ReadAll(stdin)
 			if string(b) != "jit-secret\n" {
 				t.Errorf("runner stdin = %q", b)
@@ -86,6 +86,65 @@ func TestRunLoopsAndCleansUp(t *testing.T) {
 	}
 	if prunes != 2 {
 		t.Errorf("prunes=%d, want 2 (none after the session cancelled by Ctrl-C)", prunes)
+	}
+}
+
+func TestRunParallel(t *testing.T) {
+	gh := &fakeGitHub{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	started := make(chan string)
+	var mu sync.Mutex
+	var copied, killed []string
+	agent := newAgent(t, gh, func(ctx context.Context, _ io.Reader, args ...string) error {
+		if len(args) < 6 {
+			return nil
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		switch script := args[5]; {
+		case strings.Contains(script, "rsync"):
+			copied = append(copied, script)
+		case strings.HasPrefix(script, "pkill"):
+			killed = append(killed, script)
+		case strings.Contains(script, "exec ./run.sh"):
+			mu.Unlock()
+			started <- script
+			<-ctx.Done() // the job runs until Ctrl-C
+			mu.Lock()
+		}
+		return nil
+	})
+	agent.Runners = 2
+
+	done := make(chan error)
+	go func() { done <- agent.Run(ctx) }()
+	got := map[string]bool{}
+	for range 2 { // both runners must be busy at once, or this times out
+		select {
+		case s := <-started:
+			got[s] = true
+		case <-time.After(5 * time.Second):
+			t.Fatal("second runner never started while the first was busy")
+		}
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	if !got[runScript("actions-runner")] || !got[runScript("actions-runner-2")] {
+		t.Errorf("runner scripts = %v, want one per directory", got)
+	}
+	if len(copied) != 1 || !strings.Contains(copied[0], "seq 2 2") {
+		t.Errorf("copy scripts = %q, want one creating actions-runner-2", copied)
+	}
+	if gh.registered != 2 || gh.delete != 2 {
+		t.Errorf("registered=%d deleted=%d, want 2 and 2", gh.registered, gh.delete)
+	}
+	if len(killed) != 2 || killed[0] == killed[1] {
+		t.Errorf("kill scripts = %q, want one per runner directory", killed)
 	}
 }
 
