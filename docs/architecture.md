@@ -113,5 +113,5 @@ For `pull_request`, the runner tests GitHub's merge ref (`refs/pull/N/merge`), a
 - Checks API and GitHub App (Phase 2/3)
 - A fresh VM per job (Phase 4)
 - Hosted fallback when offline
-- Docker inside the VM (pending decision)
+- Emulating amd64 images (Rosetta or qemu)
 - Parallel runners per `localci up`

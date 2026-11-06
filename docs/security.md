@@ -31,6 +31,7 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 - **Result integrity.** A local runner can report success for a failing commit. GitHub's branch protection can't tell a self-hosted runner's result from a hosted one. A green check from LocalCI means "this developer's machine says it passed".
 - **Secret confidentiality.** Every secret a routed job references is delivered to the local runner. A VM doesn't hide it from the host owner.
 - **Clean environment.** The VM persists between jobs, so state can leak from one job to the next.
+- **Docker inside the VM.** Job code is in the `docker` group, which makes it root inside the VM. That changes nothing for the host, because the VM is the boundary and has no host mounts. It does mean one job can tamper with the VM for the next.
 
 ## Invariants
 

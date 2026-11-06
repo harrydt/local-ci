@@ -23,3 +23,16 @@ limactl shell "$VM" -- bash -ec "set -u
   sudo ./bin/installdependencies.sh >/dev/null
   echo 'runner $RUNNER_VERSION installed'
 "
+
+# Docker, for services:, container: jobs and Docker actions (GitHub's hosted image ships it too).
+# Group membership only applies to new logins, and Lima reuses one SSH connection,
+# so the VM is restarted the first time the user is added to the docker group.
+if ! limactl shell "$VM" -- id -nG | grep -qw docker; then
+  limactl shell "$VM" -- bash -ec "set -u
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io >/dev/null
+    sudo usermod -aG docker \$(whoami)
+  "
+  limactl stop "$VM" && limactl start --tty=false "$VM"
+fi
+limactl shell "$VM" -- docker version --format 'docker {{.Server.Version}} installed'

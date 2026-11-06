@@ -63,5 +63,5 @@ These are the important ones; the full list is in [AGENTS.md](AGENTS.md#known-li
 
 - Needs a one-line `runs-on` change per job. GitHub has no transparent redirection.
 - The laptop must be awake and online. Otherwise routed jobs wait in the queue for up to 24h.
-- No Docker in the VM yet, so `services:` and container jobs fail.
+- Docker works in the VM (`services:` verified). Images must have ARM64 builds.
 - A local green check is the developer's word, not proof (see [security](docs/security.md)).
