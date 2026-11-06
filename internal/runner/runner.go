@@ -19,6 +19,11 @@ import (
 // runScript reads the JIT config from stdin so it never appears in argv on the host.
 const runScript = `read -r c; cd ~/actions-runner && exec ./run.sh --jitconfig "$c"`
 
+// pruneScript frees disk when the VM's root filesystem passes 80%. Images,
+// volumes and build cache persist between jobs (warm pulls) until then.
+const pruneScript = `used=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+if [ "$used" -ge 80 ]; then echo "disk ${used}% used; pruning Docker"; docker system prune -af --volumes; fi`
+
 const cleanupTimeout = 15 * time.Second
 
 type Agent struct {
@@ -79,6 +84,9 @@ func (a *Agent) session(ctx context.Context) error {
 	log.Info("runner exited", "session_s", int(time.Since(start).Seconds()), "err", err)
 	if ctx.Err() != nil {
 		return nil
+	}
+	if perr := a.limactl(ctx, nil, "shell", a.VM, "--", "bash", "-c", pruneScript); perr != nil {
+		log.Warn("prune Docker", "err", perr)
 	}
 	return err
 }

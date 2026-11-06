@@ -82,7 +82,7 @@ Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - The laptop must be awake and online. Sleep/wake and network drops are untested (`docs/research/002-phase1-validation.md`).
 - One job at a time per `localci up`. Concurrent jobs queue behind each other.
-- Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation.
+- Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 
 ## Working in parallel
 

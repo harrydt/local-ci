@@ -57,8 +57,13 @@ func TestRunLoopsAndCleansUp(t *testing.T) {
 	defer cancel()
 
 	var mu sync.Mutex
-	jobs := 0
+	jobs, prunes := 0, 0
 	agent := newAgent(t, gh, func(ctx context.Context, stdin io.Reader, args ...string) error {
+		if len(args) > 5 && args[5] == pruneScript {
+			mu.Lock()
+			prunes++
+			mu.Unlock()
+		}
 		if len(args) > 4 && args[4] == "-c" && args[5] == runScript {
 			b, _ := io.ReadAll(stdin)
 			if string(b) != "jit-secret\n" {
@@ -78,6 +83,9 @@ func TestRunLoopsAndCleansUp(t *testing.T) {
 	}
 	if gh.registered != 3 || gh.delete != 3 {
 		t.Errorf("registered=%d deleted=%d, want 3 and 3", gh.registered, gh.delete)
+	}
+	if prunes != 2 {
+		t.Errorf("prunes=%d, want 2 (none after the session cancelled by Ctrl-C)", prunes)
 	}
 }
 
