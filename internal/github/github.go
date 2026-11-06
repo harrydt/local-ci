@@ -1,5 +1,5 @@
 // Package github is the minimal GitHub REST client LocalCI needs: registering
-// ephemeral JIT runners and deleting them.
+// ephemeral JIT runners, deleting them, and routing jobs via LOCALCI_RUNNERS.
 package github
 
 import (
@@ -70,6 +70,59 @@ func (c *Client) DeleteRunner(ctx context.Context, owner, repo string, id int64)
 		return nil
 	}
 	return err
+}
+
+// Login returns the login of the token's user.
+func (c *Client) Login(ctx context.Context) (string, error) {
+	var resp struct {
+		Login string `json:"login"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/user", nil, &resp, http.StatusOK); err != nil {
+		return "", err
+	}
+	return resp.Login, nil
+}
+
+// RoutingVar is the repo variable workflows read in runs-on: a JSON object
+// mapping a GitHub login to that user's runner label.
+const RoutingVar = "LOCALCI_RUNNERS"
+
+// SetRoute sets login's entry in RoutingVar to label, or removes it when label
+// is empty. Other users' entries are kept. Needs only write access.
+//
+// ponytail: read-modify-write with no conditional update, so two users starting
+// or stopping in the same instant can lose one edit. Per-user variables if it bites.
+func (c *Client) SetRoute(ctx context.Context, owner, repo, login, label string) error {
+	base := fmt.Sprintf("/repos/%s/%s/actions/variables", url.PathEscape(owner), url.PathEscape(repo))
+	var v struct {
+		Value string `json:"value"`
+	}
+	err := c.do(ctx, http.MethodGet, base+"/"+RoutingVar, nil, &v, http.StatusOK)
+	exists := err == nil
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+
+	routes := map[string]string{}
+	if exists && v.Value != "" {
+		if err := json.Unmarshal([]byte(v.Value), &routes); err != nil {
+			return fmt.Errorf("%s is not a JSON object of login to label: %w", RoutingVar, err)
+		}
+	}
+	if routes[login] == label {
+		return nil
+	}
+	if label == "" {
+		delete(routes, login)
+	} else {
+		routes[login] = label
+	}
+	b, _ := json.Marshal(routes) // a map[string]string always marshals
+
+	if !exists {
+		return c.do(ctx, http.MethodPost, base, map[string]string{"name": RoutingVar, "value": string(b)}, nil, http.StatusCreated)
+	}
+	return c.do(ctx, http.MethodPatch, base+"/"+RoutingVar, map[string]string{"value": string(b)}, nil, http.StatusNoContent)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, in, out any, want int) error {

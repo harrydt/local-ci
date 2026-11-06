@@ -42,16 +42,15 @@ make check   # vet + test + gofmt check; run before committing
 ## Running the POC
 
 1. `bin/localci setup`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
-2. In the target repo, set `runs-on` as shown above and create a repo variable:
-   `gh variable set LOCALCI_RUNNERS -R <owner/repo> --body '{"<your-login>":"localci-<your-login>"}'`
-3. `bin/localci up -repo <owner/repo> -label localci-<your-login>`. Add `-runners N` to run N jobs at once. Ctrl-C deregisters the runners.
+2. In the target repo, set `runs-on` as shown above.
+3. `bin/localci up -repo <owner/repo>`. It adds `"<your-login>":"localci-<your-login>"` to the `LOCALCI_RUNNERS` repo variable (creating it if needed) and removes it on Ctrl-C, SIGTERM or SIGHUP, so your jobs go back to hosted runners when it stops. Add `-runners N` to run N jobs at once.
 4. Push, then verify:
    `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
    The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
 5. To see a red check: break a test (in `localci-bench`, change `want` to 5 in `cases/go-cpu/hello_test.go`), push, and run step 4 again. Expect `failure`.
 6. To benchmark: `scripts/bench.sh <owner/repo> <workflow.yml>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for the same commit.
 
-The reference target is `TeepLabs/localci-bench`, which already has `LOCALCI_RUNNERS` set for `harrydt`. Add your own login to it.
+The reference target is `TeepLabs/localci-bench`.
 
 ## Conventions
 
@@ -75,7 +74,7 @@ Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
 ## Known limitations
 
 - Existing workflows need a `runs-on` change. Transparent redirection isn't possible.
-- If the laptop is offline, routed jobs stay queued for up to 24h and then fail. There's no fallback.
+- Jobs fall back to hosted runners only when `localci up` exits cleanly. After SIGKILL, a crash or power loss, your entry stays in `LOCALCI_RUNNERS` and your jobs queue (up to 24h) until the next `localci up`. A sleeping or offline laptop with `localci up` still running also keeps jobs queued until it wakes.
 - The VM is ARM64. amd64-only tools and Docker images break or run under emulation.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.

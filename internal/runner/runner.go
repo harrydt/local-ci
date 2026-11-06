@@ -50,7 +50,8 @@ const cleanupTimeout = 15 * time.Second
 type Agent struct {
 	GitHub      *github.Client
 	Owner, Repo string
-	Label       string // runner label; must match the routing in LOCALCI_RUNNERS
+	Login       string // GitHub user whose jobs are routed here
+	Label       string // runner label; Run maps Login to it in LOCALCI_RUNNERS
 	Runners     int    // runners in parallel, one job each; 0 means 1
 	VM          string // Lima instance name
 	Log         *slog.Logger
@@ -61,7 +62,8 @@ type Agent struct {
 }
 
 // Run loops until ctx is cancelled. Failures of a single runner session are
-// logged and retried; only setup failures are returned.
+// logged and retried; only setup failures are returned. While it runs, Login's
+// jobs are routed to Label; once ctx is cancelled they go back to hosted runners.
 func (a *Agent) Run(ctx context.Context) error {
 	if a.limactl == nil {
 		a.limactl = execLimactl
@@ -83,9 +85,25 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 	}
 
+	if err := a.GitHub.SetRoute(ctx, a.Owner, a.Repo, a.Login, a.Label); err != nil {
+		return fmt.Errorf("route %s's jobs to %s: %w", a.Login, a.Label, err)
+	}
+	a.Log.Info("routing jobs here", "login", a.Login)
+
 	var wg sync.WaitGroup
 	for i := 1; i <= n; i++ {
 		wg.Go(func() { a.loop(ctx, i) })
+	}
+	<-ctx.Done()
+	// Unroute before the runners go away, so new jobs don't queue for them.
+	// ponytail: SIGKILL or a crash skips this and leaves jobs queued until the
+	// next localci up; a scheduled sweep would need a backend (ADR 0002).
+	uctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+	defer cancel()
+	if err := a.GitHub.SetRoute(uctx, a.Owner, a.Repo, a.Login, ""); err != nil {
+		a.Log.Error("unroute failed; remove your entry from LOCALCI_RUNNERS by hand", "login", a.Login, "err", err)
+	} else {
+		a.Log.Info("jobs routed back to hosted runners", "login", a.Login)
 	}
 	wg.Wait()
 	return nil

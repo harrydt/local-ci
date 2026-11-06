@@ -98,6 +98,72 @@ func TestDeleteRunner(t *testing.T) {
 	}
 }
 
+func TestSetRoute(t *testing.T) {
+	tests := []struct {
+		name       string
+		current    string // "" means the variable doesn't exist
+		label      string
+		wantMethod string // "" means no write
+		wantValue  string
+		wantErr    string
+	}{
+		{name: "create variable", label: "localci-me", wantMethod: "POST", wantValue: `{"me":"localci-me"}`},
+		{name: "add keeps others", current: `{"you":"localci-you"}`, label: "localci-me", wantMethod: "PATCH", wantValue: `{"me":"localci-me","you":"localci-you"}`},
+		{name: "remove keeps others", current: `{"me":"localci-me","you":"localci-you"}`, wantMethod: "PATCH", wantValue: `{"you":"localci-you"}`},
+		{name: "already set", current: `{"me":"localci-me"}`, label: "localci-me"},
+		{name: "remove when absent", current: `{}`},
+		{name: "remove when no variable"},
+		{name: "not JSON", current: `nope`, label: "localci-me", wantErr: "not a JSON object"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotMethod, gotValue string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/actions/variables/LOCALCI_RUNNERS":
+					if tt.current == "" {
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					_ = json.NewEncoder(w).Encode(map[string]string{"name": "LOCALCI_RUNNERS", "value": tt.current})
+				case r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/actions/variables",
+					r.Method == http.MethodPatch && r.URL.Path == "/repos/o/r/actions/variables/LOCALCI_RUNNERS":
+					var body struct{ Name, Value string }
+					_ = json.NewDecoder(r.Body).Decode(&body)
+					gotMethod, gotValue = r.Method, body.Value
+					if r.Method == http.MethodPost {
+						if body.Name != "LOCALCI_RUNNERS" {
+							t.Errorf("created variable %q", body.Name)
+						}
+						w.WriteHeader(http.StatusCreated)
+					} else {
+						w.WriteHeader(http.StatusNoContent)
+					}
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+			}))
+			defer srv.Close()
+
+			c := New("tok")
+			c.BaseURL = srv.URL
+			err := c.SetRoute(context.Background(), "o", "r", "me", tt.label)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gotMethod != tt.wantMethod || gotValue != tt.wantValue {
+				t.Errorf("write = %s %s, want %s %s", gotMethod, gotValue, tt.wantMethod, tt.wantValue)
+			}
+		})
+	}
+}
+
 func TestCancelledContext(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("request should not be sent")

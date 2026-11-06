@@ -85,10 +85,10 @@ sequenceDiagram
 ```mermaid
 flowchart TD
   ev[push / pull_request / workflow_dispatch] --> eval{"fromJSON(vars.LOCALCI_RUNNERS || '{}')<br/>[github.actor]"}
-  eval -- "actor listed, e.g. localci-alice" --> online{localci up running<br/>for that label?}
+  eval -- "actor listed, e.g. localci-alice<br/>(only while their localci up runs)" --> online{runner online<br/>for that label?}
   eval -- "not listed (incl. fork PRs)" --> hosted[GitHub-hosted ubuntu-latest]
   online -- yes --> local[Runs on the developer's Mac]
-  online -- no --> queued["Job stays queued<br/>(fails after 24h)"]
+  online -- "no (asleep, or killed uncleanly)" --> queued["Job stays queued<br/>(fails after 24h)"]
 ```
 
 `runs-on` is evaluated when the job is queued. Opt-in jobs use:
@@ -97,13 +97,14 @@ flowchart TD
 runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-latest' }}
 ```
 
-`LOCALCI_RUNNERS` is a repository variable mapping a GitHub login to a runner label, for example `{"alice":"localci-alice"}`. Each job runs exactly once, on either a hosted or a local runner, so duplicate or conflicting checks can't happen.
+`LOCALCI_RUNNERS` is a repository variable mapping a GitHub login to a runner label, for example `{"alice":"localci-alice"}`. `localci up` adds its user's entry on start and removes it on a clean exit (Ctrl-C, SIGTERM, SIGHUP), which needs only write access. Each job runs exactly once, on either a hosted or a local runner, so duplicate or conflicting checks can't happen.
 
 For `pull_request`, the runner tests GitHub's merge ref (`refs/pull/N/merge`), and the check appears on the PR head SHA. That's the same as hosted runners (research 002).
 
 ## Failure behaviour
 
-- **Laptop offline or asleep:** the job stays queued and fails after 24h. No fallback in Phase 1.
+- **`localci up` stopped cleanly:** the user's entry is gone, so new jobs run on hosted runners.
+- **Laptop offline or asleep, or `localci up` killed with SIGKILL or crashed:** the entry stays, so the job stays queued until the next `localci up`, or fails after 24h.
 - **Agent killed mid-job:** GitHub fails the job. On shutdown, cleanup kills the listener in the VM and deletes the registration.
 - **Registration fails** (network, API): logged, then retried every 10s.
 - **Cancellation and timeouts:** handled by the runner itself (`timeout-minutes`, cancel button).
@@ -112,6 +113,4 @@ For `pull_request`, the runner tests GitHub's merge ref (`refs/pull/N/merge`), a
 
 - Checks API and GitHub App (Phase 2/3)
 - A fresh VM per job (Phase 4)
-- Hosted fallback when offline
 - Emulating amd64 images (Rosetta or qemu)
-- Parallel runners per `localci up`

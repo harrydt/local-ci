@@ -21,20 +21,16 @@ Requires macOS on Apple Silicon, Go, [Lima](https://lima-vm.io) 2.x and the [Git
 ```sh
 make build
 bin/localci setup                             # one-time: VM + runner
-bin/localci up -repo owner/name -label localci-$(gh api user --jq .login)
+bin/localci up -repo owner/name               # routes your jobs here until it stops
 ```
 
-In the target repo, change each job's `runs-on` and set one repo variable:
+In the target repo, change each job's `runs-on`:
 
 ```yaml
 runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-latest' }}
 ```
 
-```sh
-gh variable set LOCALCI_RUNNERS -R owner/name --body '{"your-login":"localci-your-login"}'
-```
-
-Jobs from people not in the map, including fork PRs, keep running on GitHub-hosted runners.
+`localci up` adds you to the `LOCALCI_RUNNERS` repo variable and removes you when it stops. Jobs from people not in it, including fork PRs and anyone whose `localci up` isn't running, run on GitHub-hosted runners.
 
 ## Benchmark (single sample, CPU-bound Go tests)
 
@@ -62,6 +58,6 @@ Details are in [research 002](docs/research/002-phase1-validation.md). Test case
 These are the important ones; the full list is in [AGENTS.md](AGENTS.md#known-limitations).
 
 - Needs a one-line `runs-on` change per job. GitHub has no transparent redirection.
-- The laptop must be awake and online. Otherwise routed jobs wait in the queue for up to 24h.
+- The laptop must be awake and online while `localci up` runs. If it sleeps, or `localci up` is killed without a chance to clean up, routed jobs wait in the queue for up to 24h.
 - Docker works in the VM (`services:` verified). Images must have ARM64 builds.
 - A local green check is the developer's word, not proof (see [security](docs/security.md)).

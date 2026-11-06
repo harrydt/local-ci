@@ -2,11 +2,13 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -15,17 +17,37 @@ import (
 	"github.com/teeplabs/localci/internal/github"
 )
 
-// fakeGitHub counts JIT registrations and deletions.
+// fakeGitHub counts JIT registrations and deletions, and records the
+// LOCALCI_RUNNERS values written.
 type fakeGitHub struct {
 	mu                 sync.Mutex
 	registered, delete int
 	failRegister       bool
+	routes             []string
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch {
+	case strings.Contains(r.URL.Path, "/actions/variables"):
+		switch r.Method {
+		case http.MethodGet:
+			if len(f.routes) == 0 {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"value": f.routes[len(f.routes)-1]})
+		default:
+			var body struct{ Value string }
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.routes = append(f.routes, body.Value)
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+		}
 	case r.Method == http.MethodPost && f.failRegister:
 		w.WriteHeader(http.StatusInternalServerError)
 	case r.Method == http.MethodPost:
@@ -44,7 +66,7 @@ func newAgent(t *testing.T, gh *fakeGitHub, limactl func(context.Context, io.Rea
 	c := github.New("tok")
 	c.BaseURL = srv.URL
 	return &Agent{
-		GitHub: c, Owner: "o", Repo: "r", Label: "localci-test", VM: "vm",
+		GitHub: c, Owner: "o", Repo: "r", Login: "me", Label: "localci-test", VM: "vm",
 		Log:        slog.New(slog.DiscardHandler),
 		limactl:    limactl,
 		retryDelay: time.Millisecond,
@@ -83,6 +105,9 @@ func TestRunLoopsAndCleansUp(t *testing.T) {
 	}
 	if gh.registered != 3 || gh.delete != 3 {
 		t.Errorf("registered=%d deleted=%d, want 3 and 3", gh.registered, gh.delete)
+	}
+	if want := []string{`{"me":"localci-test"}`, `{}`}; !slices.Equal(gh.routes, want) {
+		t.Errorf("routes written = %q, want %q", gh.routes, want)
 	}
 	if prunes != 2 {
 		t.Errorf("prunes=%d, want 2 (none after the session cancelled by Ctrl-C)", prunes)

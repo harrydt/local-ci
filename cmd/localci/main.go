@@ -80,7 +80,7 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	fs := flag.NewFlagSet("up", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repo := fs.String("repo", "", "GitHub repository as owner/name (required)")
-	label := fs.String("label", "", "runner label, must match this user's entry in LOCALCI_RUNNERS (required)")
+	label := fs.String("label", "", "runner label (default localci-<your login>)")
 	vm := fs.String("vm", "localci", "Lima instance name")
 	runners := fs.Int("runners", 1, "jobs to run in parallel, each on its own runner in the VM")
 	if err := fs.Parse(args); err != nil {
@@ -90,23 +90,29 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
 		return fmt.Errorf("-repo must be owner/name, got %q", *repo)
 	}
-	if *label == "" {
-		return errors.New("-label is required")
-	}
 	if *runners < 1 {
 		return fmt.Errorf("-runners must be at least 1, got %d", *runners)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// SIGHUP too: closing the terminal must unroute, or jobs queue for a dead runner.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
 	token, err := githubToken(ctx)
 	if err != nil {
 		return err
 	}
+	gh := github.New(token)
+	login, err := gh.Login(ctx)
+	if err != nil {
+		return fmt.Errorf("look up your GitHub login: %w", err)
+	}
+	if *label == "" {
+		*label = "localci-" + login
+	}
 	agent := &runner.Agent{
-		GitHub: github.New(token),
-		Owner:  owner, Repo: name, Label: *label, VM: *vm, Runners: *runners,
+		GitHub: gh,
+		Owner:  owner, Repo: name, Login: login, Label: *label, VM: *vm, Runners: *runners,
 		Log: logger.With("repo", *repo, "label", *label),
 	}
 	logger.Info("localci up", "repo", *repo, "label", *label, "vm", *vm, "runners", *runners)
