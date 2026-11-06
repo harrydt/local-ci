@@ -45,7 +45,7 @@ func TestGenerateJITConfig(t *testing.T) {
 					t.Errorf("body = %+v", body)
 				}
 				w.WriteHeader(tt.status)
-				w.Write([]byte(tt.resp))
+				_, _ = w.Write([]byte(tt.resp))
 			}))
 			defer srv.Close()
 

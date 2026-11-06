@@ -53,7 +53,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost:
 		f.registered++
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"runner":{"id":9},"encoded_jit_config":"jit-secret"}`))
+		_, _ = w.Write([]byte(`{"runner":{"id":9},"encoded_jit_config":"jit-secret"}`))
 	case r.Method == http.MethodDelete:
 		f.delete++
 		w.WriteHeader(http.StatusNoContent)

@@ -37,6 +37,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 make build   # bin/localci
 make test    # go test ./...
 make check   # vet + test + gofmt check; run before committing
+golangci-lint run   # also runs in CI with shellcheck (.github/workflows/ci.yml)
 ```
 
 ## Running the POC
