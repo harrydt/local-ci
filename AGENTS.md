@@ -79,7 +79,7 @@ Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
-- The laptop must be awake and online. Sleep/wake and network drops are untested (`docs/research/002-phase1-validation.md`).
+- Short sleeps and network drops heal themselves: jobs queued meanwhile run after wake. A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`. Real lid-close sleep is still untested (`docs/research/004-sleep-and-network.md`).
 - `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 
