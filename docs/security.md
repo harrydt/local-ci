@@ -14,7 +14,7 @@ flowchart LR
   subgraph Untrusted["Untrusted: developer-controlled"]
     subgraph Mac[Mac host]
       L[localci + gh token]
-      subgraph VM["Lima VM (no host mounts)"]
+      subgraph VM["Lima VM (no host mounts,<br/>no host loopback)"]
         R[runner + job code]
       end
     end
@@ -24,7 +24,7 @@ flowchart LR
   L -- "repo-admin token" --> A
 ```
 
-Everything that crosses into the untrusted box is exposed to the developer, and everything that comes out of it is the developer's word. The VM boundary protects the **developer's** host from job code (that's why there are no host mounts). It does not protect jobs or secrets from the developer.
+Everything that crosses into the untrusted box is exposed to the developer, and everything that comes out of it is the developer's word. The VM boundary protects the **developer's** host from job code (that's why there are no host mounts, and why the VM can't reach services on the Mac's `127.0.0.1`). It does not protect jobs or secrets from the developer.
 
 ## What Phase 1 does **not** guarantee
 
@@ -34,6 +34,8 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 - **Docker inside the VM.** Job code is in the `docker` group, which makes it root inside the VM. That changes nothing for the host, because the VM is the boundary and has no host mounts. It does mean one job can tamper with the VM for the next.
 
 ## Invariants
+
+- The VM can't reach services that listen on the Mac's `127.0.0.1`. `setup-vm.sh` sets `networkOpts.hostLoopback: false` on Lima 2.3 and later ([research 005](research/005-phase2-security.md), F1). Services the Mac binds to all interfaces stay reachable through its LAN IP.
 
 - Tokens are read at runtime (`GH_TOKEN` or `gh auth token`) and are never logged, printed, or written to disk by localci.
 - The runner's JIT config is single-use and is passed directly to the runner process.

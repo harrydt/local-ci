@@ -28,7 +28,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 
 - macOS on Apple Silicon
 - Go (version in `go.mod`)
-- [Lima](https://lima-vm.io) 2.x: `brew install lima`
+- [Lima](https://lima-vm.io) 2.3 or later: `brew install lima`. On older Lima, job code can reach services on the Mac's `127.0.0.1`, and `localci setup` warns
 - [GitHub CLI](https://cli.github.com): `brew install gh`, then `gh auth login` with admin on the target repo
 
 ## Commands

@@ -16,7 +16,7 @@ flowchart LR
   subgraph Mac["Developer's Mac"]
     cli["localci up<br/>(Go binary)"]
     gh["gh auth token"]
-    subgraph VM["Lima VM 'localci'<br/>Ubuntu 24.04 ARM64, no host mounts"]
+    subgraph VM["Lima VM 'localci'<br/>Ubuntu 24.04 ARM64, no host mounts,<br/>no host loopback"]
       runner["actions/runner × N slots<br/>ephemeral JIT, one job each"]
     end
     gh -. token in memory .-> cli

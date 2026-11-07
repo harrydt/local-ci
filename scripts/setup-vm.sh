@@ -7,11 +7,27 @@ VM=${VM:-localci}
 RUNNER_VERSION=2.338.2
 RUNNER_SHA256=670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945
 
+# Lima 2.3+ can stop job code from reaching services that listen on the Mac's
+# 127.0.0.1 through host.lima.internal. Older Lima can't, so warn and carry on.
+LIMA_VERSION=$(limactl --version | awk '{print $NF}')
+NO_HOST_LOOPBACK=
+if [ "$(printf '2.3.0\n%s\n' "$LIMA_VERSION" | sort -V | head -1)" = 2.3.0 ]; then
+  NO_HOST_LOOPBACK='.networkOpts.hostLoopback = false'
+else
+  echo "WARNING: Lima $LIMA_VERSION lets job code reach services on this Mac's 127.0.0.1." >&2
+  echo "WARNING: upgrade to Lima 2.3 or later and re-run localci setup to block that." >&2
+fi
+
 if limactl list -q | grep -qx "$VM"; then
+  if [ -n "$NO_HOST_LOOPBACK" ] && ! grep -q 'hostLoopback: false' "$(limactl list --format '{{.Dir}}' "$VM")/lima.yaml"; then
+    if [ "$(limactl list --format '{{.Status}}' "$VM")" = Running ]; then limactl stop "$VM"; fi
+    limactl edit --tty=false --set "$NO_HOST_LOOPBACK" "$VM"
+  fi
   limactl start --tty=false "$VM"
 else
   # --plain: no host mounts, so job code cannot read the developer's $HOME.
-  limactl start --name="$VM" --plain --cpus=4 --memory=6 --disk=30 --vm-type=vz --tty=false template:ubuntu-24.04
+  limactl start --name="$VM" --plain --cpus=4 --memory=6 --disk=30 --vm-type=vz --tty=false \
+    ${NO_HOST_LOOPBACK:+--set="$NO_HOST_LOOPBACK"} template:ubuntu-24.04
 fi
 
 limactl shell "$VM" -- bash -ec "set -u
