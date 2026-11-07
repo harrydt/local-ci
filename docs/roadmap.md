@@ -1,31 +1,16 @@
 # Roadmap
 
-Full goals per phase: `docs/brief.md` §2.
+Full goals per phase: `docs/brief.md` §2. Current tasks: `docs/progress.md`.
 
-## Phase 1 — Make it work (current)
+```mermaid
+flowchart LR
+  P1["Phase 1<br/>Make it work<br/>✅ done"] --> P2["Phase 2<br/>Make it secure"] --> P3["Phase 3<br/>Make it zero-trust"] --> P4["Phase 4<br/>Make it fast"]
+```
 
-1. **Spike (manual):** register a runner by hand in a Lima VM. Verify a green job, a red job, the SHA match, `runs-on` routing, and offline queueing. Record timings.
-2. **`internal/github`:** JIT config client.
-3. **`internal/runner` + `localci up`:** VM lifecycle and the ephemeral runner loop.
-4. **End-to-end verification** against a test repo (green and red).
-
-**Done when:** pushing to the test repo produces green or red job checks on the exact SHA, executed on the Mac, with timings logged.
-
-**Future improvements** (deferred; Phase 1 assumes the laptop is awake and online, see research 002):
-
-- Sleep/wake and network-drop behaviour: test it, and consider `caffeinate -i` during jobs
-- Several runners per `localci up` so jobs run in parallel
-- Run as a launchd agent
-- Host CPU, memory and battery sampling during jobs
-
-## Phase 2 — Make it secure
-
-Keep protected secrets off local runners (route those jobs to hosted runners). Replace the repo-admin token with a GitHub App or something narrower. Evaluate OIDC.
-
-## Phase 3 — Make it zero-trust
-
-Independent verification, for example a trusted remote re-execution that posts its own required check. Be explicit about what ordinary MacBooks can't attest to.
-
-## Phase 4 — Make it fast
-
-Caches, VM warm start, a VM per job, hosted fallback. Only on the basis of benchmarks collected since Phase 1.
+| Phase | Goal | Items |
+|---|---|---|
+| 1. Work ✅ | Existing jobs run on a Mac and produce the real check | native JIT runner in Lima, `localci setup`/`up`, Docker and `services:`, parallel runners, hosted fallback while stopped, sleep/network behaviour ([progress](progress.md)) |
+| 1, leftovers | | launchd agent, real lid-close test, amd64 emulation if needed, Homebrew tap |
+| 2. Secure | Secrets and deploys never reach a laptop | secrets policy (route jobs that use secrets or environments to hosted runners), evaluate OIDC. Non-admin auth only when someone needs it ([ADR 0002](decisions/0002-repo-admin.md)) |
+| 3. Zero-trust | Others can rely on a local result | ideas to revisit: optimistic verification (re-run a random sample of local jobs on hosted runners and flag disagreements), signed results in a transparency log (Sigstore, in-toto) |
+| 4. Fast | Faster than hosted, measured | warm caches, VM warm start, a fresh VM per job, host CPU/memory/battery sampling |

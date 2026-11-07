@@ -42,4 +42,4 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 
 ## Deferred
 
-GitHub App or narrower auth (Phase 2). Independent verification (Phase 3).
+Keeping secret-using jobs off local runners (Phase 2). Non-admin auth, until someone needs it ([ADR 0002](decisions/0002-repo-admin.md)). Independent verification (Phase 3).

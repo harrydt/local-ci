@@ -6,7 +6,7 @@ LocalCI runs a repo's existing GitHub Actions jobs on the developer's Apple Sili
 
 ## Architecture (Phase 1)
 
-A single Go binary manages a Lima ARM64 Ubuntu VM and keeps one **ephemeral JIT self-hosted runner** (GitHub's official `actions/runner`) registered in it, labelled `localci-<user>`. GitHub sends jobs to it, the runner executes them, and GitHub produces the real job check run. LocalCI has no backend, no GitHub App and no Checks API code. See `docs/architecture.md` and ADR `docs/decisions/0001-native-self-hosted-runner.md`.
+A single Go binary manages a Lima ARM64 Ubuntu VM and keeps N (default 1) **ephemeral JIT self-hosted runners** (GitHub's official `actions/runner`) registered in it, labelled `localci-<login>`. While it runs, it maps the user's login to that label in the `LOCALCI_RUNNERS` repo variable. GitHub sends jobs to the runner, the runner executes them, and GitHub produces the real job check run. LocalCI has no backend, no GitHub App and no Checks API code. See `docs/architecture.md` and ADR `docs/decisions/0001-native-self-hosted-runner.md`.
 
 Workflows opt in with one line per job:
 
@@ -17,7 +17,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 ## Layout
 
 - `cmd/localci/`: CLI entry point, flags, slog setup
-- `internal/github/`: REST client for JIT runner config and deleting runners (stdlib `net/http`)
+- `internal/github/`: REST client for JIT runner config, deleting runners and the `LOCALCI_RUNNERS` variable (stdlib `net/http`)
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
@@ -40,18 +40,13 @@ make check   # vet + test + gofmt check; run before committing
 golangci-lint run   # also runs in CI with shellcheck (.github/workflows/ci.yml)
 ```
 
-## Running the POC
+## Running it
 
-1. `bin/localci setup`: creates the `localci` Lima VM and installs the runner. Safe to re-run.
-2. In the target repo, set `runs-on` as shown above.
-3. `bin/localci up -repo <owner/repo>`. It adds `"<your-login>":"localci-<your-login>"` to the `LOCALCI_RUNNERS` repo variable (creating it if needed) and removes it on Ctrl-C, SIGTERM or SIGHUP, so your jobs go back to hosted runners when it stops. Add `-runners N` to run N jobs at once.
-4. Push, then verify:
-   `gh api repos/<owner/repo>/commits/$(git rev-parse HEAD)/check-runs --jq '.check_runs[] | "\(.name) \(.conclusion)"'`
-   The job's `runner_name` (from `gh api repos/<owner/repo>/actions/runs/<id>/jobs`) should start with `localci-`.
-5. To see a red check: break a test (in `localci-bench`, change `want` to 5 in `cases/go-cpu/hello_test.go`), push, and run step 4 again. Expect `failure`.
-6. To benchmark: `scripts/bench.sh <owner/repo> <workflow.yml>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for the same commit.
+Setup and first run: [README → Get started](README.md#get-started). The reference target is `TeepLabs/localci-bench`. Useful checks:
 
-The reference target is `TeepLabs/localci-bench`.
+- Which runner took a job: `gh api repos/<owner/repo>/actions/runs/<id>/jobs --jq '.jobs[] | "\(.conclusion) \(.runner_name)"'`. Local ones start with `localci-`.
+- Red check: in `localci-bench`, change `want` to 5 in `cases/go-cpu/hello_test.go` and push. Expect `failure`.
+- Benchmark: `scripts/bench.sh <owner/repo> <workflow.yml>` (needs `localci up` running and a `workflow_dispatch` trigger) prints hosted vs local-cold vs local-warm timings for one commit.
 
 ## Conventions
 
@@ -70,17 +65,17 @@ The reference target is `TeepLabs/localci-bench`.
 
 ## Status
 
-Phase 1 POC works end to end. Details and next tasks are in `docs/progress.md`.
+Phase 1 is done and on `main`. Next tasks are in `docs/progress.md`.
 
 ## Known limitations
 
 - Existing workflows need a `runs-on` change. Transparent redirection isn't possible.
-- Jobs fall back to hosted runners only when `localci up` exits cleanly. After SIGKILL, a crash or power loss, your entry stays in `LOCALCI_RUNNERS` and your jobs queue (up to 24h) until the next `localci up`. A sleeping or offline laptop with `localci up` still running also keeps jobs queued until it wakes.
+- Jobs fall back to hosted runners only when `localci up` exits cleanly. After SIGKILL, a crash or power loss, or while the Mac sleeps with `localci up` running, the user's jobs queue (up to 24h) until it's back. Short sleeps and network drops recover on their own; real lid-close sleep is untested (`docs/research/004-sleep-and-network.md`).
 - The VM is ARM64. amd64-only tools and Docker images break or run under emulation.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
-- Short sleeps and network drops heal themselves: jobs queued meanwhile run after wake. A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`. Real lid-close sleep is still untested (`docs/research/004-sleep-and-network.md`).
+- A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.
 - `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 

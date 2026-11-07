@@ -2,37 +2,82 @@
 
 Run your existing GitHub Actions jobs on your own Apple Silicon Mac and get the same green or red check on GitHub.
 
-Laptops often have more compute than GitHub-hosted runners, but every push still re-runs CI remotely. LocalCI routes your own jobs to an ephemeral GitHub self-hosted runner inside a local Linux VM. GitHub dispatches the job, the runner executes it on the exact commit, and the check comes from GitHub Actions itself, so branch protection behaves as usual.
-
 ```mermaid
 flowchart LR
   dev([git push]) --> GH[GitHub Actions]
-  GH -- "runs-on: localci-you" --> VM["Lima VM on your Mac<br/>ephemeral actions/runner"]
-  GH -- "everyone else" --> Hosted[GitHub-hosted runner]
+  GH -- "your jobs, while localci up runs" --> VM["Lima VM on your Mac<br/>ephemeral actions/runner"]
+  GH -- "everyone else, or you when it's stopped" --> Hosted[GitHub-hosted runner]
   VM -- "logs + result" --> GH --> Check["✅ / ❌ check on the commit"]
 ```
 
-**Status:** Phase 1 proof of concept. It works end to end for push and PR events. Runs one job at a time by default, or N with `-runners N`. See the [progress log](docs/progress.md).
+GitHub still dispatches the job and produces the check. LocalCI only provides the machine, so branch protection behaves as usual.
 
-## Quick start
+**Status:** Phase 1 works end to end (push, PRs, `services:`, parallel jobs, hosted fallback). See [progress](docs/progress.md).
 
-Requires macOS on Apple Silicon, Go, [Lima](https://lima-vm.io) 2.x and the [GitHub CLI](https://cli.github.com) with admin on the target repo.
+## Get started
+
+You need a Mac with Apple Silicon and **admin** on the repo you want to run jobs for.
+
+**1. Install and build** (once)
 
 ```sh
-make build
-bin/localci setup                             # one-time: VM + runner
-bin/localci up -repo owner/name               # routes your jobs here until it stops
+brew install go lima gh
+gh auth login
+git clone git@github.com:TeepLabs/localci.git && cd localci
+make build                  # → bin/localci
+bin/localci setup           # creates the VM, installs the runner and Docker (a few minutes the first time)
 ```
 
-In the target repo, change each job's `runs-on`:
+**2. Try it on the bench repo**
+
+```sh
+bin/localci up -repo TeepLabs/localci-bench       # leave it running
+```
+
+In a second terminal:
+
+```sh
+gh workflow run go-cpu.yml -R TeepLabs/localci-bench
+gh run watch -R TeepLabs/localci-bench            # pick the run
+```
+
+The job's runner name starts with `localci-<your login>`. To see a red check, clone `localci-bench`, change `want` to 5 in `cases/go-cpu/hello_test.go` and push.
+
+**3. Stop**
+
+Ctrl-C. Your runner is removed and your jobs go back to GitHub-hosted runners.
+
+## Use it on your own repo
+
+Change `runs-on` on each job that may run locally:
 
 ```yaml
 runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-latest' }}
 ```
 
-`localci up` adds you to the `LOCALCI_RUNNERS` repo variable and removes you when it stops. Jobs from people not in it, including fork PRs and anyone whose `localci up` isn't running, run on GitHub-hosted runners.
+Then `bin/localci up -repo owner/name`. Add `-runners 2` to run two jobs at once. `localci up` adds you to the `LOCALCI_RUNNERS` repo variable while it runs, so only your jobs come to your Mac.
 
-## Benchmark (single sample, CPU-bound Go tests)
+Don't add the line to jobs that use secrets or deploy. Those stay on hosted runners until Phase 2.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `runner not installed in VM` | `bin/localci setup` |
+| `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
+| Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
+| A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |
+
+## Working on LocalCI
+
+```sh
+make check            # vet, tests, gofmt (CI runs this plus golangci-lint and shellcheck)
+golangci-lint run
+```
+
+Read [AGENTS.md](AGENTS.md) for conventions, and [progress](docs/progress.md) for what's next.
+
+## Benchmark (one sample, CPU-bound Go tests)
 
 | | Job | `go test` |
 |---|---|---|
@@ -40,24 +85,21 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 | LocalCI cold (4 vCPU ARM64 VM) | 42s | 17s |
 | LocalCI warm | 24s | 19s |
 
-Details are in [research 002](docs/research/002-phase1-validation.md). Test cases and results live in [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench).
+Details are in [research 002](docs/research/002-phase1-validation.md).
 
-## Documentation
+## Docs
 
-- [Architecture](docs/architecture.md): components, job lifecycle, routing (with diagrams)
-- [Security](docs/security.md): threat model and what is **not** guaranteed
-- [Roadmap](docs/roadmap.md): the four phases (work, secure, zero-trust, fast)
-- [Progress log](docs/progress.md): current state and next tasks
-- [Decisions](docs/decisions/): ADRs
-- [Research](docs/research/): platform facts, spike, validation
-- [AGENTS.md](AGENTS.md): conventions and commands for contributors and coding agents
+- [Architecture](docs/architecture.md): components, job lifecycle, routing
+- [Security](docs/security.md): what a local check does and doesn't prove
+- [Roadmap](docs/roadmap.md) and [progress](docs/progress.md)
+- [Decisions](docs/decisions/) and [research](docs/research/)
 - [Product brief](docs/brief.md)
 
 ## Limitations
 
-These are the important ones; the full list is in [AGENTS.md](AGENTS.md#known-limitations).
+- Each job needs the one-line `runs-on` change.
+- If your Mac sleeps, or `localci up` is killed uncleanly, your jobs wait until it's back (up to 24h).
+- ARM64 only: amd64-only images and tools don't work.
+- A local green check is your Mac's word, not proof ([security](docs/security.md)).
 
-- Needs a one-line `runs-on` change per job. GitHub has no transparent redirection.
-- The laptop must be awake and online while `localci up` runs. If it sleeps, or `localci up` is killed without a chance to clean up, routed jobs wait in the queue for up to 24h.
-- Docker works in the VM (`services:` verified). Images must have ARM64 builds.
-- A local green check is the developer's word, not proof (see [security](docs/security.md)).
+The full list is in [AGENTS.md](AGENTS.md#known-limitations).
