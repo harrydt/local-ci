@@ -2,7 +2,7 @@
 
 LocalCI runs a repo's existing GitHub Actions jobs on the developer's Apple Silicon Mac and lets GitHub report the green or red check. Full product brief: `docs/brief.md`.
 
-**Start here:** `docs/progress.md` has the current state, open decisions and next tasks. Add an entry to it at the end of every work session.
+**Start here:** `docs/progress.md` has the current state, open decisions and next tasks. Add an entry to it at the end of every work session. Entry headings are `### YYYY-MM-DD: <topic>` only: no author, no "with Claude Code", no AI or tool attribution.
 
 ## Architecture (Phase 1)
 
