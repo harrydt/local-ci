@@ -37,6 +37,7 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 
 - The VM can't reach services that listen on the Mac's `127.0.0.1`. `setup-vm.sh` sets `networkOpts.hostLoopback: false` on Lima 2.3 and later ([research 005](research/005-phase2-security.md), F1). Services the Mac binds to all interfaces stay reachable through its LAN IP.
 
+- The local cache server listens on the VM's port 7380, which Lima `--plain` doesn't forward to the Mac. It decodes but doesn't verify job tokens: it only serves the developer's own jobs, and anything that reaches it is already in the VM. It keeps GitHub's branch scoping, so a branch can't overwrite what the default branch restores ([research 006](research/006-local-actions-cache.md)).
 - Tokens are read at runtime (`GH_TOKEN` or `gh auth token`) and are never logged, printed, or written to disk by localci.
 - The runner's JIT config is single-use and is passed directly to the runner process.
 - Don't route jobs that reference protected secrets to local runners.

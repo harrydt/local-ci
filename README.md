@@ -24,8 +24,8 @@ You need a Mac with Apple Silicon and **admin** on the repo you want to run jobs
 brew install go lima gh
 gh auth login
 git clone git@github.com:TeepLabs/localci.git && cd localci
-make build                  # → bin/localci
-bin/localci setup           # creates the VM, installs the runner and Docker (a few minutes the first time)
+make build                  # → bin/localci, bin/localci-cache-linux-arm64
+bin/localci setup           # creates the VM, installs the runner, Docker and the local cache (a few minutes the first time)
 ```
 
 **2. Try it on the bench repo**
@@ -59,11 +59,19 @@ Then `bin/localci up -repo owner/name`. Add `-runners 2` to run two jobs at once
 
 Don't add the line to jobs that use secrets or deploy. Those stay on hosted runners until Phase 2.
 
+## Caching
+
+`actions/cache`, `setup-*` caches and BuildKit `type=gha` save and restore in the VM, not over your internet link. 30–200 MB takes under a second instead of 3s to restore and 12–80s to save ([research 006](docs/research/006-local-actions-cache.md)). Workflows don't change. Artifacts still go to GitHub.
+
+`localci setup` installs a small cache server in the VM and patches one byte of the runner so jobs use it. `localci setup -cache=false` undoes both.
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `runner not installed in VM` | `bin/localci setup` |
+| `local cache is on but not answering` | `bin/localci setup`, or turn it off with `bin/localci setup -cache=false` |
+| `unknown .../Runner.Worker.dll` during setup | The runner version changed: update both checksums in `scripts/install-cache.sh` |
 | `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
 | Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
 | A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |

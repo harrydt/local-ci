@@ -19,6 +19,8 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 - `cmd/localci/`: CLI entry point, flags, slog setup
 - `internal/github/`: REST client for JIT runner config, deleting runners and the `LOCALCI_RUNNERS` variable (stdlib `net/http`)
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
+- `internal/cache/`, `cmd/localci-cache/`: local stand-in for GitHub's Actions cache API, run in the VM as a systemd service (`make build` cross-compiles `bin/localci-cache-linux-arm64`) ([research 006](docs/research/006-local-actions-cache.md))
+- `scripts/install-cache.sh`: run in the VM by `localci setup` to turn the cache on or off: installs the server, patches one byte of `Runner.Worker.dll` (checksums pinned), writes the job-started hook
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
 - Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench)
@@ -74,6 +76,7 @@ Phase 1 is done and on `main`. Next tasks are in `docs/progress.md`.
 - The VM is ARM64. amd64-only tools and Docker images break or run under emulation.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
+- `actions/cache` uses the cache server in the VM (on by default). It relies on a one-byte patch to the pinned runner: a runner self-update silently sends caches back to GitHub, and a runner version bump needs new checksums in `scripts/install-cache.sh`. Jobs that fall back to hosted runners use GitHub's cache.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.
 - `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.

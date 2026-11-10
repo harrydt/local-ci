@@ -52,3 +52,17 @@ if ! limactl shell "$VM" -- id -nG | grep -qw docker; then
   limactl stop "$VM" && limactl start --tty=false "$VM"
 fi
 limactl shell "$VM" -- docker version --format 'docker {{.Server.Version}} installed'
+
+# Local Actions cache (scripts/install-cache.sh): a cache server in the VM and a
+# one-byte runner patch, so actions/cache saves and restores on the VM's disk
+# instead of over the Mac's internet link. localci setup passes the server
+# binary and the in-VM script; CACHE=off turns it back off.
+INSTALL_CACHE=${INSTALL_CACHE:-$(cat "$(dirname "$0")/install-cache.sh" 2>/dev/null || true)}
+if [ "${CACHE:-on}" = off ]; then
+  limactl shell "$VM" -- bash -s off <<<"$INSTALL_CACHE"
+elif [ -f "${CACHE_BIN:-}" ]; then
+  limactl copy "$CACHE_BIN" "$VM:/tmp/localci-cache"
+  limactl shell "$VM" -- bash -s on <<<"$INSTALL_CACHE"
+else
+  echo "WARNING: ${CACHE_BIN:-localci-cache-linux-arm64} not found (run make build); jobs use GitHub's cache." >&2
+fi

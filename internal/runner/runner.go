@@ -17,9 +17,11 @@ import (
 	"github.com/teeplabs/localci/internal/github"
 )
 
-// runScript reads the JIT config from stdin so it never appears in argv on the host.
+// runScript reads the JIT config from stdin so it never appears in argv on the
+// host. With the local cache on (localci setup), it points the job's cache and
+// results client at the server in the VM; the patched runner leaves it set.
 func runScript(dir string) string {
-	return fmt.Sprintf(`read -r c; cd ~/%s && exec ./run.sh --jitconfig "$c"`, dir)
+	return fmt.Sprintf(`read -r c; cd ~/%s && if [ -f ~/.localci/cache-url ]; then export ACTIONS_RESULTS_URL=$(cat ~/.localci/cache-url) ACTIONS_RUNNER_HOOK_JOB_STARTED=~/.localci/job-started.sh; fi; exec ./run.sh --jitconfig "$c"`, dir)
 }
 
 // runnerDir is slot i's runner directory in the VM. A runner writes its
@@ -44,6 +46,9 @@ done`
 // volumes and build cache persist between jobs (warm pulls) until then.
 const pruneScript = `used=$(df --output=pcent / | tail -1 | tr -dc 0-9)
 if [ "$used" -ge 80 ]; then echo "disk ${used}% used; pruning Docker"; docker system prune -af --volumes; fi`
+
+// cacheCheckScript passes when the local cache is off, or on and healthy.
+const cacheCheckScript = `[ ! -f ~/.localci/cache-url ] || curl -fsS -m 5 "$(cat ~/.localci/cache-url)healthz" >/dev/null`
 
 const cleanupTimeout = 15 * time.Second
 
@@ -77,6 +82,11 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "test", "-x", "actions-runner/run.sh"); err != nil {
 		return fmt.Errorf("runner not installed in VM %q (run localci setup): %w", a.VM, err)
+	}
+	// With the local cache on, the patched runner sends artifact uploads
+	// through it too, so jobs would fail if it were down.
+	if err := a.limactl(ctx, nil, "shell", a.VM, "--", "bash", "-c", cacheCheckScript); err != nil {
+		return fmt.Errorf("local cache is on but not answering in VM %q (run localci setup, or localci setup -cache=false): %w", a.VM, err)
 	}
 	n := max(a.Runners, 1)
 	if n > 1 {
