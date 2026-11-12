@@ -114,6 +114,7 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 		*label = "localci-" + login
 	}
 	warnRoutedSecrets(ctx, gh, owner, name, logger)
+	warnWritableToken(ctx, gh, owner, name, logger)
 	agent := &runner.Agent{
 		GitHub: gh,
 		Owner:  owner, Repo: name, Login: login, Label: *label, VM: *vm, Runners: *runners,
@@ -136,6 +137,19 @@ func warnRoutedSecrets(ctx context.Context, gh *github.Client, owner, repo strin
 		for _, f := range workflow.Check(files[file]) {
 			logger.Warn("job uses "+f.What+" but runs on this Mac; keep it on hosted runners", "workflow", file, "job", f.Job)
 		}
+	}
+}
+
+// warnWritableToken warns when jobs get a read-write GITHUB_TOKEN by default:
+// job code on this Mac, a dependency included, could then push to the repo.
+func warnWritableToken(ctx context.Context, gh *github.Client, owner, repo string, logger *slog.Logger) {
+	perm, err := gh.DefaultWorkflowPermissions(ctx, owner, repo)
+	if err != nil {
+		logger.Warn("could not check default GITHUB_TOKEN permissions", "err", err)
+		return
+	}
+	if perm == "write" {
+		logger.Warn("jobs get a read-write GITHUB_TOKEN by default; set it to read in Settings > Actions > General > Workflow permissions, and grant more per job with permissions:")
 	}
 }
 

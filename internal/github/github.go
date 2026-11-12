@@ -127,6 +127,19 @@ func (c *Client) SetRoute(ctx context.Context, owner, repo, login, label string)
 	return c.do(ctx, http.MethodPatch, base+"/"+RoutingVar, map[string]string{"value": string(b)}, nil, http.StatusNoContent)
 }
 
+// DefaultWorkflowPermissions returns the repo's default GITHUB_TOKEN
+// permissions: "read" or "write".
+func (c *Client) DefaultWorkflowPermissions(ctx context.Context, owner, repo string) (string, error) {
+	var resp struct {
+		Default string `json:"default_workflow_permissions"`
+	}
+	path := fmt.Sprintf("/repos/%s/%s/actions/permissions/workflow", url.PathEscape(owner), url.PathEscape(repo))
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp, http.StatusOK); err != nil {
+		return "", err
+	}
+	return resp.Default, nil
+}
+
 // Workflows returns the workflow files on the default branch, by file name.
 // A repo without .github/workflows has none.
 func (c *Client) Workflows(ctx context.Context, owner, repo string) (map[string][]byte, error) {

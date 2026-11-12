@@ -39,6 +39,7 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 - Tokens are read at runtime (`GH_TOKEN` or `gh auth token`) and are never logged, printed, or written to disk by localci.
 - The runner's JIT config is single-use and is passed directly to the runner process.
 - Don't route jobs that use secrets (other than `GITHUB_TOKEN`), an `environment:` or OIDC (`id-token: write`) to local runners. `localci up` warns about them by scanning the default branch's workflows (a line scan, not a YAML parser). For OIDC deploys, the cloud's trust policy should require `runner_environment: github-hosted`. GitHub enforces that claim, not the developer ([research 005](research/005-phase2-security.md), R2).
+- A local job's `GITHUB_TOKEN` is only as narrow as the repo's default. `localci up` warns when the default is read-write, so dependencies in a routed job could push to the repo ([research 005](research/005-phase2-security.md), R3).
 - **Public repos:** routing by `github.actor` keeps fork PRs on hosted runners. Never give a local runner a label that untrusted actors can target.
 
 ## Deferred
