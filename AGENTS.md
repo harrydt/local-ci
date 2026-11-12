@@ -21,7 +21,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
-- Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench)
+- Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench). [`TeepLabs/bench-ripgrep`](https://github.com/TeepLabs/bench-ripgrep) is a private ripgrep mirror for a real-project benchmark
 - `docs/`: architecture, roadmap, security, ADRs (`decisions/`), research notes (`research/`)
 
 ## Requirements
@@ -76,7 +76,7 @@ Phase 1 is done and on `main`. Next tasks are in `docs/progress.md`.
 - The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.
-- `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.
+- `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own `HOME` (`<dir>/_home`) and tool cache, like separate hosted machines. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 
 ## Working in parallel

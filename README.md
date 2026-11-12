@@ -77,15 +77,15 @@ golangci-lint run
 
 Read [AGENTS.md](AGENTS.md) for conventions, and [progress](docs/progress.md) for what's next.
 
-## Benchmark (one sample, CPU-bound Go tests)
+## Benchmarks (one sample each)
 
-| | Job | `go test` |
+| | ripgrep CI, 6 jobs, total | Go CPU-bound tests, job |
 |---|---|---|
-| GitHub-hosted (2 vCPU x86) | 57s | 40s |
-| LocalCI cold (4 vCPU ARM64 VM) | 42s | 17s |
-| LocalCI warm | 24s | 19s |
+| GitHub-hosted (2 vCPU x86 per job) | 79s | 57s |
+| LocalCI warm, 1 runner (4 vCPU ARM64 VM on an M2) | 98s | 24s |
+| LocalCI warm, `-runners 3` | **64s** | — |
 
-Details are in [research 002](docs/research/002-phase1-validation.md).
+Each job runs 1.5–4× faster locally, but hosted runs every job on its own machine at once. With one local runner, a multi-job workflow takes the sum of its jobs, so it needs `-runners N` to beat hosted on total time ([why](docs/research/006-ripgrep-bench.md#why-faster-jobs-can-still-mean-a-slower-workflow)). Details: [ripgrep](docs/research/006-ripgrep-bench.md), [Go](docs/research/002-phase1-validation.md).
 
 ## Docs
 

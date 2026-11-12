@@ -18,8 +18,10 @@ import (
 )
 
 // runScript reads the JIT config from stdin so it never appears in argv on the host.
+// Each slot gets its own HOME, like separate hosted machines: tools such as
+// rustup corrupt a shared ~/.rustup when two jobs install at once.
 func runScript(dir string) string {
-	return fmt.Sprintf(`read -r c; cd ~/%s && exec ./run.sh --jitconfig "$c"`, dir)
+	return fmt.Sprintf(`read -r c; cd ~/%s && mkdir -p _home && HOME=$PWD/_home exec ./run.sh --jitconfig "$c"`, dir)
 }
 
 // runnerDir is slot i's runner directory in the VM. A runner writes its
@@ -33,9 +35,9 @@ func runnerDir(i int) string {
 }
 
 // copyScript creates the extra runner directories from the installed one,
-// without its credentials, logs or work tree.
+// without its credentials, logs, work tree or HOME.
 const copyScript = `for i in $(seq 2 %d); do
-  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
+  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude=_home --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
 done`
 
 // ponytail: with Runners > 1 a prune can delete an image another job pulled but

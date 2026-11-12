@@ -10,6 +10,7 @@
 #
 # usage: scripts/bench.sh owner/repo workflow-file [ref]
 #   e.g. scripts/bench.sh TeepLabs/localci-bench go-cpu.yml
+#        scripts/bench.sh TeepLabs/bench-ripgrep bench.yml master
 set -euo pipefail
 
 REPO=${1:?usage: bench.sh owner/repo workflow-file [ref]}
@@ -40,7 +41,8 @@ gh variable set LOCALCI_RUNNERS -R "$REPO" --body '{}'
 dispatch hosted
 gh variable set LOCALCI_RUNNERS -R "$REPO" --body "$ORIG"
 
+# Toolchains and caches in every runner slot (each slot has its own HOME, _home).
 # Go's module cache is read-only, hence the chmod before rm.
-limactl shell "$VM" -- bash -c 'chmod -R u+w ~/go 2>/dev/null; rm -rf ~/go ~/.cache/go-build ~/actions-runner/_work/_tool'
+limactl shell "$VM" -- bash -c 'chmod -R u+w ~/go ~/actions-runner*/_home 2>/dev/null; rm -rf ~/go ~/.cache/go-build ~/.cargo ~/.rustup ~/actions-runner*/_home ~/actions-runner*/_work/_tool'
 dispatch local-cold
 dispatch local-warm

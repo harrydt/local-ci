@@ -162,6 +162,11 @@ func TestRunParallel(t *testing.T) {
 	if !got[runScript("actions-runner")] || !got[runScript("actions-runner-2")] {
 		t.Errorf("runner scripts = %v, want one per directory", got)
 	}
+	for s := range got {
+		if !strings.Contains(s, "HOME=$PWD/_home") {
+			t.Errorf("runner script %q shares HOME with other slots", s)
+		}
+	}
 	if len(copied) != 1 || !strings.Contains(copied[0], "seq 2 2") {
 		t.Errorf("copy scripts = %q, want one creating actions-runner-2", copied)
 	}
