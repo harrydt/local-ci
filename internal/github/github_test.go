@@ -179,3 +179,53 @@ func TestCancelledContext(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestWorkflows(t *testing.T) {
+	tests := []struct {
+		name  string
+		noDir bool
+		want  map[string]string
+	}{
+		{name: "yaml files only", want: map[string]string{"ci.yml": "on: push\n", "deploy.yaml": "on: release\n"}},
+		{name: "no workflows dir", noDir: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				const dir = "/repos/o/r/contents/.github/workflows"
+				switch r.URL.Path {
+				case dir:
+					if tt.noDir {
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					_, _ = w.Write([]byte(`[{"name":"ci.yml","type":"file"},{"name":"deploy.yaml","type":"file"},{"name":"README.md","type":"file"},{"name":"sub","type":"dir"}]`))
+				case dir + "/ci.yml":
+					// The API wraps base64 content every 60 characters.
+					_, _ = w.Write([]byte(`{"content":"b246IHB1c2gK\n"}`))
+				case dir + "/deploy.yaml":
+					_, _ = w.Write([]byte(`{"content":"b246IHJlbGVhc2UK"}`))
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer srv.Close()
+
+			c := New("tok")
+			c.BaseURL = srv.URL
+			got, err := c.Workflows(context.Background(), "o", "r")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d files, want %d", len(got), len(tt.want))
+			}
+			for name, src := range tt.want {
+				if string(got[name]) != src {
+					t.Errorf("%s = %q, want %q", name, got[name], src)
+				}
+			}
+		})
+	}
+}

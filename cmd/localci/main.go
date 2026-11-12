@@ -9,14 +9,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 
 	"github.com/teeplabs/localci/internal/github"
 	"github.com/teeplabs/localci/internal/runner"
+	"github.com/teeplabs/localci/internal/workflow"
 	"github.com/teeplabs/localci/scripts"
 )
 
@@ -110,6 +113,7 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	if *label == "" {
 		*label = "localci-" + login
 	}
+	warnRoutedSecrets(ctx, gh, owner, name, logger)
 	agent := &runner.Agent{
 		GitHub: gh,
 		Owner:  owner, Repo: name, Login: login, Label: *label, VM: *vm, Runners: *runners,
@@ -117,6 +121,22 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	}
 	logger.Info("localci up", "repo", *repo, "label", *label, "vm", *vm, "runners", *runners)
 	return agent.Run(ctx)
+}
+
+// warnRoutedSecrets warns about jobs that opt in to LocalCI but use secrets, an
+// environment or OIDC, so they would run on this Mac (docs/security.md). It
+// checks the default branch only and never stops localci up.
+func warnRoutedSecrets(ctx context.Context, gh *github.Client, owner, repo string, logger *slog.Logger) {
+	files, err := gh.Workflows(ctx, owner, repo)
+	if err != nil {
+		logger.Warn("could not check workflows for secrets", "err", err)
+		return
+	}
+	for _, file := range slices.Sorted(maps.Keys(files)) {
+		for _, f := range workflow.Check(files[file]) {
+			logger.Warn("job uses "+f.What+" but runs on this Mac; keep it on hosted runners", "workflow", file, "job", f.Job)
+		}
+	}
 }
 
 func setup(args []string, stderr io.Writer) error {

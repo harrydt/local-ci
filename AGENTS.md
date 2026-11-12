@@ -18,6 +18,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 
 - `cmd/localci/`: CLI entry point, flags, slog setup
 - `internal/github/`: REST client for JIT runner config, deleting runners and the `LOCALCI_RUNNERS` variable (stdlib `net/http`)
+- `internal/workflow/`: line scan of workflow files for routed jobs that use secrets, an environment or OIDC
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
@@ -60,7 +61,7 @@ Setup and first run: [README → Get started](README.md#get-started). The refere
 
 - Never log, print, or persist GitHub tokens. Read the token at runtime from `GH_TOKEN` or `gh auth token`.
 - Treat the developer machine as untrusted. A local green check proves nothing to a third party (`docs/security.md`).
-- Don't route jobs that use protected secrets to local runners.
+- Don't route jobs that use secrets, an `environment:` or `id-token: write` to local runners. `localci up` warns about them (`internal/workflow`).
 - Never commit secrets, `.env` files, or runner credentials.
 
 ## Status

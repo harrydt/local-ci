@@ -57,7 +57,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 
 Then `bin/localci up -repo owner/name`. Add `-runners 2` to run two jobs at once. `localci up` adds you to the `LOCALCI_RUNNERS` repo variable while it runs, so only your jobs come to your Mac.
 
-Don't add the line to jobs that use secrets or deploy. Those stay on hosted runners until Phase 2.
+Don't add the line to jobs that use secrets, an `environment:` or OIDC (`id-token: write`), because they would run on your Mac. `localci up` warns about any such job on the default branch. If you deploy to a cloud with OIDC, also require `runner_environment` to be `github-hosted` in the cloud's trust policy. GitHub sets that claim and a developer can't fake it, so a deploy job that lands on a Mac by mistake gets no credentials.
 
 ## Troubleshooting
 

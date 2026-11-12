@@ -36,12 +36,11 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 ## Invariants
 
 - The VM can't reach services that listen on the Mac's `127.0.0.1`. `setup-vm.sh` sets `networkOpts.hostLoopback: false` on Lima 2.3 and later ([research 005](research/005-phase2-security.md), F1). Services the Mac binds to all interfaces stay reachable through its LAN IP.
-
 - Tokens are read at runtime (`GH_TOKEN` or `gh auth token`) and are never logged, printed, or written to disk by localci.
 - The runner's JIT config is single-use and is passed directly to the runner process.
-- Don't route jobs that reference protected secrets to local runners.
+- Don't route jobs that use secrets (other than `GITHUB_TOKEN`), an `environment:` or OIDC (`id-token: write`) to local runners. `localci up` warns about them by scanning the default branch's workflows (a line scan, not a YAML parser). For OIDC deploys, the cloud's trust policy should require `runner_environment: github-hosted`. GitHub enforces that claim, not the developer ([research 005](research/005-phase2-security.md), R2).
 - **Public repos:** routing by `github.actor` keeps fork PRs on hosted runners. Never give a local runner a label that untrusted actors can target.
 
 ## Deferred
 
-Keeping secret-using jobs off local runners (Phase 2). Non-admin auth, until someone needs it ([ADR 0002](decisions/0002-repo-admin.md)). Independent verification (Phase 3).
+Non-admin auth, until someone needs it ([ADR 0002](decisions/0002-repo-admin.md)). Independent verification (Phase 3).
