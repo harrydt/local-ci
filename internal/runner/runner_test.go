@@ -200,6 +200,7 @@ func TestRunSetupErrors(t *testing.T) {
 	}{
 		{name: "VM start fails", failOn: "start", wantErr: `start VM "vm"`},
 		{name: "runner missing", failOn: "test", wantErr: "runner not installed"},
+		{name: "local cache down", failOn: "healthz", wantErr: "local cache is on but not answering"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

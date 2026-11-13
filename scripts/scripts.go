@@ -6,3 +6,8 @@ import _ "embed"
 
 //go:embed setup-vm.sh
 var SetupVM string
+
+// InstallCache runs inside the VM to turn the local Actions cache on or off.
+//
+//go:embed install-cache.sh
+var InstallCache string

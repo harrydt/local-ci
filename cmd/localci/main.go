@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -157,14 +158,22 @@ func setup(args []string, stderr io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	vm := fs.String("vm", "localci", "Lima instance name")
+	useCache := fs.Bool("cache", true, "serve actions/cache from the VM's disk instead of GitHub (needs localci-cache-linux-arm64 next to localci)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	cacheState, cacheBin := "off", ""
+	if *useCache {
+		cacheState = "on"
+		if exe, err := os.Executable(); err == nil {
+			cacheBin = filepath.Join(filepath.Dir(exe), "localci-cache-linux-arm64")
+		}
+	}
 	cmd := exec.CommandContext(ctx, "bash", "-c", scripts.SetupVM, "setup-vm.sh")
-	cmd.Env = append(os.Environ(), "VM="+*vm)
+	cmd.Env = append(os.Environ(), "VM="+*vm, "CACHE="+cacheState, "CACHE_BIN="+cacheBin, "INSTALL_CACHE="+scripts.InstallCache)
 	cmd.Stdout, cmd.Stderr = stderr, stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("setup VM %q: %w", *vm, err)
