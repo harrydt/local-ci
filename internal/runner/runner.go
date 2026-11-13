@@ -37,10 +37,12 @@ func runnerDir(i int) string {
 	return fmt.Sprintf("actions-runner-%d", i)
 }
 
-// copyScript creates the extra runner directories from the installed one,
-// without its credentials, logs, work tree or HOME.
+// copyScript creates or refreshes the extra runner directories from the
+// installed one, without its credentials, logs, work tree or HOME. It syncs
+// every time (unchanged files are skipped), so the copies follow a runner
+// version bump or the cache patch; excluded paths are never deleted.
 const copyScript = `for i in $(seq 2 %d); do
-  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude=_home --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
+  rsync -a --delete --exclude=_work --exclude=_diag --exclude=_home --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
 done`
 
 // ponytail: with Runners > 1 a prune can delete an image another job pulled but

@@ -6,8 +6,10 @@
 //
 // It serves one developer's own jobs, so the job token is decoded but not
 // verified: anything that can reach this server is already inside the VM with
-// the token. Caches are still scoped by repository and branch the way GitHub
-// scopes them, so a PR branch can't overwrite what main restores.
+// the token. Caches are scoped by repository and branch the way GitHub scopes
+// them. That prevents accidental cross-branch overwrites; it isn't a boundary
+// against a malicious job in the VM, which could forge the claims or write
+// the storage directory directly (the server runs as the same user).
 package cache
 
 import (
@@ -277,6 +279,12 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]any{"ok": false, "message": "nothing was uploaded"})
 		return
 	}
+	// Saving it would evict everything, itself included, while reporting success.
+	if s.MaxBytes > 0 && fi.Size() > s.MaxBytes {
+		_ = os.RemoveAll(dir)
+		reply(w, map[string]any{"ok": false, "message": fmt.Sprintf("%d bytes is over the cache limit of %d", fi.Size(), s.MaxBytes)})
+		return
+	}
 	if want := int64(req.SizeBytes); want > 0 && want != fi.Size() {
 		reply(w, map[string]any{"ok": false, "message": fmt.Sprintf("uploaded %d bytes, expected %d", fi.Size(), want)})
 		return
@@ -359,11 +367,19 @@ func (s *Server) newestWithPrefix(ns, prefix string) (string, bool) {
 // upload accepts Put Blob (no comp), Put Block (comp=block&blockid=...) and
 // Put Block List (comp=blocklist, an XML list of block ids in order).
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
-	dir := filepath.Join(s.Dir, "uploads", r.PathValue("id"))
-	m, err := readUpload(dir)
-	if !isHash(r.PathValue("id")) || err != nil || r.URL.Query().Get("sig") != m.Sig {
+	if !isHash(r.PathValue("id")) {
 		http.Error(w, "unknown upload", http.StatusNotFound)
 		return
+	}
+	dir := filepath.Join(s.Dir, "uploads", r.PathValue("id"))
+	m, err := readUpload(dir)
+	if err != nil || r.URL.Query().Get("sig") != m.Sig {
+		http.Error(w, "unknown upload", http.StatusNotFound)
+		return
+	}
+	// Data can't exceed the cache limit; the block list is small and capped below.
+	if s.MaxBytes > 0 && r.URL.Query().Get("comp") != "blocklist" {
+		r.Body = http.MaxBytesReader(w, r.Body, s.MaxBytes)
 	}
 	q := r.URL.Query()
 	switch q.Get("comp") {
@@ -380,6 +396,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		err = s.commitBlocks(dir, r.Body)
 	default:
 		http.Error(w, "unsupported comp", http.StatusBadRequest)
+		return
+	}
+	if tooBig := (*http.MaxBytesError)(nil); errors.As(err, &tooBig) {
+		http.Error(w, "upload is over the cache limit", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if err != nil {

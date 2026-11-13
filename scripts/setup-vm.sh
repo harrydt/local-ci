@@ -63,6 +63,8 @@ if [ "${CACHE:-on}" = off ]; then
 elif [ -f "${CACHE_BIN:-}" ]; then
   limactl copy "$CACHE_BIN" "$VM:/tmp/localci-cache"
   limactl shell "$VM" -- bash -s on <<<"$INSTALL_CACHE"
+elif limactl shell "$VM" -- test -f .localci/cache-url; then
+  echo "WARNING: ${CACHE_BIN:-localci-cache-linux-arm64} not found (run make build); keeping the local cache already in the VM." >&2
 else
   echo "WARNING: ${CACHE_BIN:-localci-cache-linux-arm64} not found (run make build); jobs use GitHub's cache." >&2
 fi

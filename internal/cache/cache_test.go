@@ -254,6 +254,36 @@ func TestEviction(t *testing.T) {
 	}
 }
 
+func TestSizeLimits(t *testing.T) {
+	srv := newServer(t, "http://unused", 10)
+	save(t, srv, mainTok, "kept", "v1", "0123456789") // exactly the limit
+
+	// A body over the limit is cut off with 413.
+	res := rpc(t, srv, "CreateCacheEntry", mainTok, map[string]string{"key": "huge", "version": "v1"})
+	if c := put(t, res["signed_upload_url"].(string), "", "0123456789A"); c != http.StatusRequestEntityTooLarge {
+		t.Errorf("oversized upload: %d, want 413", c)
+	}
+
+	// Blocks under the limit that add up to more are refused at finalize,
+	// rather than evicting everything (the new entry too) and reporting success.
+	res = rpc(t, srv, "CreateCacheEntry", mainTok, map[string]string{"key": "big", "version": "v1"})
+	up := res["signed_upload_url"].(string)
+	for i, part := range []string{"012345", "678901"} {
+		id := base64.StdEncoding.EncodeToString(fmt.Appendf(nil, "b%d", i))
+		put(t, up, "comp=block&blockid="+url.QueryEscape(id), part)
+	}
+	ids := base64.StdEncoding.EncodeToString([]byte("b0"))
+	ids2 := base64.StdEncoding.EncodeToString([]byte("b1"))
+	put(t, up, "comp=blocklist", "<BlockList><Latest>"+ids+"</Latest><Latest>"+ids2+"</Latest></BlockList>")
+	res = rpc(t, srv, "FinalizeCacheEntryUpload", mainTok, map[string]any{"key": "big", "version": "v1", "size_bytes": 12})
+	if res["ok"] == true || !strings.Contains(fmt.Sprint(res["message"]), "over the cache limit") {
+		t.Errorf("oversized finalize: %v", res)
+	}
+	if k, _ := restore(t, srv, mainTok, "kept", "v1"); k != "kept" {
+		t.Error("a refused save evicted an existing entry")
+	}
+}
+
 func TestPassthrough(t *testing.T) {
 	var got *http.Request
 	var gotBody string

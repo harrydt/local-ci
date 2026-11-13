@@ -44,17 +44,19 @@ EOF
   for _ in $(seq 40); do curl -fs "localhost:$PORT/healthz" >/dev/null && break; sleep 0.25; done
   curl -fs "localhost:$PORT/healthz" >/dev/null || { echo "localci-cache did not start" >&2; exit 1; }
 
-  for dll in ~/actions-runner*/bin/Runner.Worker.dll; do
-    case $(sum "$dll") in
-    "$PATCHED") ;;
-    "$STOCK")
-      cp "$dll" "$dll.stock"
-      sed -i "s/$FROM/$TO/" "$dll"
-      [ "$(sum "$dll")" = "$PATCHED" ] || { cp "$dll.stock" "$dll"; echo "patch of $dll failed" >&2; exit 1; }
-      ;;
-    *) echo "unknown $dll (runner version changed?); update the checksums in install-cache.sh" >&2; exit 1 ;;
-    esac
-  done
+  # Only the installed runner: localci up re-syncs the extra slots
+  # (~/actions-runner-N) from it, so they pick up the patch, or a new runner
+  # version, without being patched here.
+  dll=~/actions-runner/bin/Runner.Worker.dll
+  case $(sum "$dll") in
+  "$PATCHED") ;;
+  "$STOCK")
+    cp "$dll" "$dll.stock"
+    sed -i "s/$FROM/$TO/" "$dll"
+    [ "$(sum "$dll")" = "$PATCHED" ] || { cp "$dll.stock" "$dll"; echo "patch of $dll failed" >&2; exit 1; }
+    ;;
+  *) echo "unknown $dll (runner version changed?); update the checksums in install-cache.sh" >&2; exit 1 ;;
+  esac
   mkdir -p ~/.localci
   # container: steps get only the job's environment, not the runner's, so the
   # job-started hook adds the URL there. Containers reach the VM by its IP;
@@ -69,11 +71,13 @@ EOF
   echo "local cache on (:$PORT)"
   ;;
 off)
-  # Marker first: a runner started from here on uses GitHub's cache again.
-  rm -f ~/.localci/cache-url ~/.localci/job-started.sh
+  # Stock DLLs first. A stock runner with the marker still present is harmless
+  # (the stock worker overwrites the URL with GitHub's), but a patched one
+  # without the marker would get no results URL, and artifact uploads would fail.
   for dll in ~/actions-runner*/bin/Runner.Worker.dll; do
     if [ -f "$dll.stock" ]; then mv "$dll.stock" "$dll"; fi
   done
+  rm -f ~/.localci/cache-url ~/.localci/job-started.sh
   sudo systemctl disable -q --now localci-cache 2>/dev/null || true
   echo "local cache off"
   ;;
