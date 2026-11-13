@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -31,6 +32,7 @@ const usage = `usage: localci [flags] <command>
 
 commands:
   setup     create the Lima VM and install the runner in it; safe to re-run
+  auth      store a GitHub token for one repo in the macOS Keychain (localci auth -h)
   up        run GitHub Actions jobs routed to this machine (localci up -h)
   version   print the localci version
 
@@ -70,6 +72,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return setup(fs.Args()[1:], stderr)
 	case "up":
 		return up(fs.Args()[1:], stderr, logger)
+	case "auth":
+		return auth(fs.Args()[1:], stderr)
 	case "":
 		fs.Usage()
 		return errors.New("missing command")
@@ -90,9 +94,9 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	owner, name, ok := strings.Cut(*repo, "/")
-	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
-		return fmt.Errorf("-repo must be owner/name, got %q", *repo)
+	owner, name, err := splitRepo(*repo)
+	if err != nil {
+		return err
 	}
 	if *runners < 1 {
 		return fmt.Errorf("-runners must be at least 1, got %d", *runners)
@@ -102,7 +106,7 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
-	token, err := githubToken(ctx)
+	token, err := githubToken(ctx, *repo, logger)
 	if err != nil {
 		return err
 	}
@@ -181,17 +185,123 @@ func setup(args []string, stderr io.Writer) error {
 	return nil
 }
 
-// githubToken prefers GH_TOKEN and falls back to the gh CLI. The token is
-// held in memory only.
-func githubToken(ctx context.Context) (string, error) {
+func splitRepo(repo string) (owner, name string, err error) {
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", "", fmt.Errorf("-repo must be owner/name, got %q", repo)
+	}
+	return owner, name, nil
+}
+
+// keychainService names localci's Keychain items. The account is owner/name.
+const keychainService = "localci"
+
+// auth stores a fine-grained token for one repo in the Keychain (ADR 0003, R4).
+// `security` prompts for the token itself, so it never passes through localci's
+// arguments, output or memory until up reads it back.
+func auth(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("auth", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repo := fs.String("repo", "", "GitHub repository as owner/name (required)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	owner, name, err := splitRepo(*repo)
+	if err != nil {
+		return err
+	}
+	// Without a terminal, security reads end-of-input and stores an empty token.
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
+		return fmt.Errorf("localci auth asks for the token, so run it in a terminal: %w", err)
+	}
+	defer tty.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	link := tokenURL(*repo)
+	fmt.Fprintf(stderr, "Create a token at %s\nUnder Repository access, pick \"Only select repositories\" and choose %s.\nCheck the permissions: Administration read and write, Variables read and write, Contents read-only. Then paste it here.\n", link, name)
+	_ = exec.CommandContext(ctx, "open", link).Run()
+	cmd := exec.CommandContext(ctx, "security", "add-generic-password", "-U", "-s", keychainService, "-a", *repo, "-w")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, stderr, stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("store token in the Keychain: %w", err)
+	}
+
+	// A token that can't read the repo's Actions settings is removed, so up
+	// never picks it over the gh fallback.
+	token, err := keychainToken(ctx, *repo)
+	if err == nil && token == "" {
+		err = errors.New("empty token")
+	}
+	if err == nil {
+		_, err = github.New(token).DefaultWorkflowPermissions(ctx, owner, name)
+	}
+	if err != nil {
+		_ = exec.Command("security", "delete-generic-password", "-s", keychainService, "-a", *repo).Run()
+		return fmt.Errorf("token not stored: it can't read %s's Actions settings; check it has %s selected and Administration access, then run localci auth again: %w", *repo, name, err)
+	}
+	fmt.Fprintf(stderr, "Token stored. localci up -repo %s will use it.\n", *repo)
+	return nil
+}
+
+// tokenURL pre-fills GitHub's fine-grained token form with what localci up
+// needs: runners (Administration), LOCALCI_RUNNERS (Variables) and the workflow
+// scan (Contents). GitHub can't pre-select the repo.
+func tokenURL(repo string) string {
+	owner, _, _ := strings.Cut(repo, "/")
+	q := url.Values{
+		"name":              {cut("localci "+repo, 40)},
+		"description":       {"localci up for " + repo},
+		"target_name":       {owner},
+		"expires_in":        {"90"},
+		"administration":    {"write"},
+		"actions_variables": {"write"},
+		"contents":          {"read"},
+	}
+	return "https://github.com/settings/personal-access-tokens/new?" + q.Encode()
+}
+
+func cut(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
+// Test seams for the token sources.
+var (
+	keychainToken = func(ctx context.Context, repo string) (string, error) {
+		out, err := exec.CommandContext(ctx, "security", "find-generic-password", "-s", keychainService, "-a", repo, "-w").Output()
+		return strings.TrimSpace(string(out)), err
+	}
+	ghCLIToken = func(ctx context.Context) (string, error) {
+		out, err := exec.CommandContext(ctx, "gh", "auth", "token").Output()
+		return strings.TrimSpace(string(out)), err
+	}
+)
+
+// githubToken prefers GH_TOKEN, then the repo's Keychain token from localci
+// auth, then the gh CLI's token, which covers every repo. The token is held in
+// memory only.
+func githubToken(ctx context.Context, repo string, logger *slog.Logger) (string, error) {
 	if t := os.Getenv("GH_TOKEN"); t != "" {
 		return t, nil
 	}
-	out, err := exec.CommandContext(ctx, "gh", "auth", "token").Output()
-	if err != nil {
-		return "", fmt.Errorf("no GH_TOKEN and `gh auth token` failed (run `gh auth login`): %w", err)
+	t, err := keychainToken(ctx, repo)
+	if err == nil && t != "" {
+		return t, nil
 	}
-	return strings.TrimSpace(string(out)), nil
+	logger.Debug("no Keychain token", "repo", repo, "err", err)
+	t, err = ghCLIToken(ctx)
+	if err == nil && t == "" {
+		err = errors.New("empty token")
+	}
+	if err != nil {
+		return "", fmt.Errorf("no token: run `localci auth -repo %s`, or `gh auth login`: %v", repo, err)
+	}
+	logger.Info("using the gh CLI token, which covers every repo; run `localci auth -repo " + repo + "` for a token scoped to this one")
+	return t, nil
 }
 
 func envOr(key, def string) string {

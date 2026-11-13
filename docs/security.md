@@ -13,7 +13,7 @@ flowchart LR
   end
   subgraph Untrusted["Untrusted: developer-controlled"]
     subgraph Mac[Mac host]
-      L[localci + gh token]
+      L[localci + one-repo token]
       subgraph VM["Lima VM (no host mounts,<br/>no host loopback)"]
         R[runner + job code]
       end
@@ -37,7 +37,7 @@ Everything that crosses into the untrusted box is exposed to the developer, and 
 
 - The VM can't reach services that listen on the Mac's `127.0.0.1`. `setup-vm.sh` sets `networkOpts.hostLoopback: false` on Lima 2.3 and later ([research 005](research/005-phase2-security.md), F1). Services the Mac binds to all interfaces stay reachable through its LAN IP.
 - The local cache server listens on the VM's port 7380, which Lima `--plain` doesn't forward to the Mac. It decodes but doesn't verify job tokens: it only serves the developer's own jobs, and anything that reaches it is already in the VM. It keeps GitHub's branch scoping, which prevents accidental cross-branch overwrites; it isn't a boundary against a malicious job in the VM, which could forge the token's claims or write the cache directory directly ([research 007](research/007-local-actions-cache.md)).
-- Tokens are read at runtime (`GH_TOKEN` or `gh auth token`) and are never logged, printed, or written to disk by localci.
+- Tokens are read at runtime (`GH_TOKEN`, then the repo's Keychain token from `localci auth`, then `gh auth token`) and are never logged or printed by localci. The only copy localci stores is the `localci auth` token, in the macOS Keychain, and it's scoped to one repo with Administration and Variables write and Contents read ([ADR 0003](decisions/0003-phase2-security.md), R4). Without it, localci falls back to the `gh` token, which covers every repo, and says so at startup.
 - The runner's JIT config is single-use and is passed directly to the runner process.
 - Don't route jobs that use secrets (other than `GITHUB_TOKEN`), an `environment:` or OIDC (`id-token: write`) to local runners. `localci up` warns about them by scanning the default branch's workflows (a line scan, not a YAML parser). For OIDC deploys, the cloud's trust policy should require `runner_environment: github-hosted`. GitHub enforces that claim, not the developer ([research 005](research/005-phase2-security.md), R2).
 - A local job's `GITHUB_TOKEN` is only as narrow as the repo's default. `localci up` warns when the default is read-write, so dependencies in a routed job could push to the repo ([research 005](research/005-phase2-security.md), R3).

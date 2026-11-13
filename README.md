@@ -57,6 +57,10 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 
 Then `bin/localci up -repo owner/name`. Add `-runners 2` to run two jobs at once. `localci up` adds you to the `LOCALCI_RUNNERS` repo variable while it runs, so only your jobs come to your Mac.
 
+`localci up` borrows your `gh` token, which covers every repo you can see and doesn't expire. To give it a token for this repo only, run `bin/localci auth -repo owner/name` once. It opens GitHub's token page with the permissions filled in, asks you to pick the repo and paste the token, and keeps the token in your macOS Keychain. When the token expires (90 days by default), run it again.
+
+`localci up` uses `GH_TOKEN` if it's set, then the repo's `localci auth` token, then your `gh` token, and logs a line when it falls back to `gh`. An expired `localci auth` token stops `up` with a 401 instead of falling back.
+
 Don't add the line to jobs that use secrets, an `environment:` or OIDC (`id-token: write`), because they would run on your Mac. `localci up` warns about any such job on the default branch. If you deploy to a cloud with OIDC, also require `runner_environment` to be `github-hosted` in the cloud's trust policy. GitHub sets that claim and a developer can't fake it, so a deploy job that lands on a Mac by mistake gets no credentials.
 
 ## Caching
@@ -73,6 +77,7 @@ Don't add the line to jobs that use secrets, an `environment:` or OIDC (`id-toke
 | `local cache is on but not answering` | `bin/localci setup`, or turn it off with `bin/localci setup -cache=false` |
 | `unknown .../Runner.Worker.dll` during setup | The runner version changed: update both checksums in `scripts/install-cache.sh` |
 | `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
+| `HTTP 401` at startup | The `localci auth` token expired or was revoked: `bin/localci auth -repo owner/name` |
 | Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
 | A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |
 

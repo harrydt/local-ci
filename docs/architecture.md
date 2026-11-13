@@ -15,7 +15,7 @@ flowchart LR
 
   subgraph Mac["Developer's Mac"]
     cli["localci up<br/>(Go binary)"]
-    gh["gh auth token"]
+    gh["Keychain token (localci auth)<br/>or gh auth token"]
     subgraph VM["Lima VM 'localci'<br/>Ubuntu 24.04 ARM64, no host mounts,<br/>no host loopback"]
       runner["actions/runner × N slots<br/>ephemeral JIT, one job each"]
       cache["localci-cache :7380<br/>actions/cache on the VM's disk"]
@@ -37,7 +37,7 @@ flowchart LR
 | VM lifecycle, runner registration loop, routing on/off | `localci` (`internal/runner`) |
 | GitHub API calls | `localci` (`internal/github`) |
 | `actions/cache` storage | `localci-cache` in the VM (`internal/cache`); artifacts are forwarded to GitHub ([research 007](research/007-local-actions-cache.md)) |
-| Auth | `GH_TOKEN` or `gh auth token` (repo admin, [ADR 0002](decisions/0002-repo-admin.md)), in memory only |
+| Auth | `GH_TOKEN`, then a one-repo token from `localci auth` in the Keychain, then `gh auth token` (repo admin, [ADR 0002](decisions/0002-repo-admin.md), [ADR 0003](decisions/0003-phase2-security.md)). In memory only while running |
 
 Everything goes over outbound HTTPS. There are no inbound ports, no webhooks and no LocalCI backend.
 

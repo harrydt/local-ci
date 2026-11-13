@@ -61,7 +61,7 @@ Setup and first run: [README → Get started](README.md#get-started). The refere
 
 ## Security invariants
 
-- Never log, print, or persist GitHub tokens. Read the token at runtime from `GH_TOKEN` or `gh auth token`.
+- Never log, print, or persist GitHub tokens, except `localci auth`'s one-repo token in the macOS Keychain. Read the token at runtime: `GH_TOKEN`, then the Keychain, then `gh auth token`.
 - Treat the developer machine as untrusted. A local green check proves nothing to a third party (`docs/security.md`).
 - Don't route jobs that use secrets, an `environment:` or `id-token: write` to local runners. `localci up` warns about them (`internal/workflow`).
 - Never commit secrets, `.env` files, or runner credentials.
