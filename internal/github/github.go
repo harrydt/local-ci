@@ -5,12 +5,14 @@ package github
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -123,6 +125,54 @@ func (c *Client) SetRoute(ctx context.Context, owner, repo, login, label string)
 		return c.do(ctx, http.MethodPost, base, map[string]string{"name": RoutingVar, "value": string(b)}, nil, http.StatusCreated)
 	}
 	return c.do(ctx, http.MethodPatch, base+"/"+RoutingVar, map[string]string{"value": string(b)}, nil, http.StatusNoContent)
+}
+
+// DefaultWorkflowPermissions returns the repo's default GITHUB_TOKEN
+// permissions: "read" or "write".
+func (c *Client) DefaultWorkflowPermissions(ctx context.Context, owner, repo string) (string, error) {
+	var resp struct {
+		Default string `json:"default_workflow_permissions"`
+	}
+	path := fmt.Sprintf("/repos/%s/%s/actions/permissions/workflow", url.PathEscape(owner), url.PathEscape(repo))
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp, http.StatusOK); err != nil {
+		return "", err
+	}
+	return resp.Default, nil
+}
+
+// Workflows returns the workflow files on the default branch, by file name.
+// A repo without .github/workflows has none.
+func (c *Client) Workflows(ctx context.Context, owner, repo string) (map[string][]byte, error) {
+	base := fmt.Sprintf("/repos/%s/%s/contents/.github/workflows", url.PathEscape(owner), url.PathEscape(repo))
+	var entries []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	err := c.do(ctx, http.MethodGet, base, nil, &entries, http.StatusOK)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	files := map[string][]byte{}
+	for _, e := range entries {
+		if e.Type != "file" || !strings.HasSuffix(e.Name, ".yml") && !strings.HasSuffix(e.Name, ".yaml") {
+			continue
+		}
+		var f struct {
+			Content string `json:"content"`
+		}
+		if err := c.do(ctx, http.MethodGet, base+"/"+url.PathEscape(e.Name), nil, &f, http.StatusOK); err != nil {
+			return nil, err
+		}
+		b, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(f.Content, "\n", ""))
+		if err != nil {
+			return nil, fmt.Errorf("decode %s: %w", e.Name, err)
+		}
+		files[e.Name] = b
+	}
+	return files, nil
 }
 
 func (c *Client) do(ctx context.Context, method, path string, in, out any, want int) error {

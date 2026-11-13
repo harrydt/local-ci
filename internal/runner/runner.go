@@ -17,11 +17,14 @@ import (
 	"github.com/teeplabs/localci/internal/github"
 )
 
-// runScript reads the JIT config from stdin so it never appears in argv on the
-// host. With the local cache on (localci setup), it points the job's cache and
-// results client at the server in the VM; the patched runner leaves it set.
+// runScript reads the JIT config from stdin so it never appears in argv on the host.
+// Each slot gets its own HOME, like separate hosted machines: tools such as
+// rustup corrupt a shared ~/.rustup when two jobs install at once. With the
+// local cache on (localci setup), it also points the job's cache and results
+// client at the server in the VM; the patched runner leaves that set. The
+// ~/.localci paths expand before HOME changes, so they stay the VM user's.
 func runScript(dir string) string {
-	return fmt.Sprintf(`read -r c; cd ~/%s && if [ -f ~/.localci/cache-url ]; then export ACTIONS_RESULTS_URL=$(cat ~/.localci/cache-url) ACTIONS_RUNNER_HOOK_JOB_STARTED=~/.localci/job-started.sh; fi; exec ./run.sh --jitconfig "$c"`, dir)
+	return fmt.Sprintf(`read -r c; cd ~/%s && mkdir -p _home && if [ -f ~/.localci/cache-url ]; then export ACTIONS_RESULTS_URL=$(cat ~/.localci/cache-url) ACTIONS_RUNNER_HOOK_JOB_STARTED=~/.localci/job-started.sh; fi; HOME=$PWD/_home exec ./run.sh --jitconfig "$c"`, dir)
 }
 
 // runnerDir is slot i's runner directory in the VM. A runner writes its
@@ -35,9 +38,9 @@ func runnerDir(i int) string {
 }
 
 // copyScript creates the extra runner directories from the installed one,
-// without its credentials, logs or work tree.
+// without its credentials, logs, work tree or HOME.
 const copyScript = `for i in $(seq 2 %d); do
-  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
+  [ -x ~/actions-runner-$i/run.sh ] || rsync -a --exclude=_work --exclude=_diag --exclude=_home --exclude='.credentials*' --exclude=.runner ~/actions-runner/ ~/actions-runner-$i/
 done`
 
 // ponytail: with Runners > 1 a prune can delete an image another job pulled but

@@ -18,12 +18,13 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 
 - `cmd/localci/`: CLI entry point, flags, slog setup
 - `internal/github/`: REST client for JIT runner config, deleting runners and the `LOCALCI_RUNNERS` variable (stdlib `net/http`)
+- `internal/workflow/`: line scan of workflow files for routed jobs that use secrets, an environment or OIDC
 - `internal/runner/`: `Agent` loop: start the VM, register a JIT runner, run one job, clean up, repeat
-- `internal/cache/`, `cmd/localci-cache/`: local stand-in for GitHub's Actions cache API, run in the VM as a systemd service (`make build` cross-compiles `bin/localci-cache-linux-arm64`) ([research 006](docs/research/006-local-actions-cache.md))
+- `internal/cache/`, `cmd/localci-cache/`: local stand-in for GitHub's Actions cache API, run in the VM as a systemd service (`make build` cross-compiles `bin/localci-cache-linux-arm64`) ([research 007](docs/research/007-local-actions-cache.md))
 - `scripts/install-cache.sh`: run in the VM by `localci setup` to turn the cache on or off: installs the server, patches one byte of `Runner.Worker.dll` (checksums pinned), writes the job-started hook
 - `scripts/setup-vm.sh`: one-time VM and runner install (pinned version and SHA256), embedded in the binary as `localci setup`
 - `scripts/bench.sh`: hosted vs local-cold vs local-warm timings for one commit
-- Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench)
+- Test cases and benchmark results live in the private repo [`TeepLabs/localci-bench`](https://github.com/TeepLabs/localci-bench). [`TeepLabs/bench-ripgrep`](https://github.com/TeepLabs/bench-ripgrep) is a private ripgrep mirror for a real-project benchmark
 - `docs/`: architecture, roadmap, security, ADRs (`decisions/`), research notes (`research/`)
 
 ## Requirements
@@ -62,7 +63,7 @@ Setup and first run: [README → Get started](README.md#get-started). The refere
 
 - Never log, print, or persist GitHub tokens. Read the token at runtime from `GH_TOKEN` or `gh auth token`.
 - Treat the developer machine as untrusted. A local green check proves nothing to a third party (`docs/security.md`).
-- Don't route jobs that use protected secrets to local runners.
+- Don't route jobs that use secrets, an `environment:` or `id-token: write` to local runners. `localci up` warns about them (`internal/workflow`).
 - Never commit secrets, `.env` files, or runner credentials.
 
 ## Status
@@ -79,7 +80,7 @@ Phase 1 is done and on `main`. Next tasks are in `docs/progress.md`.
 - `actions/cache` uses the cache server in the VM (on by default). It relies on a one-byte patch to the pinned runner: a runner self-update silently sends caches back to GitHub, and a runner version bump needs new checksums in `scripts/install-cache.sh`. Jobs that fall back to hosted runners use GitHub's cache.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.
-- `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own tool cache. They share the VM's CPU, memory and Docker.
+- `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own `HOME` (`<dir>/_home`) and tool cache, like separate hosted machines. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions are verified (bench cases `go-postgres`, `docker-compat`). Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
 
 ## Working in parallel

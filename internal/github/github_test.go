@@ -179,3 +179,89 @@ func TestCancelledContext(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestWorkflows(t *testing.T) {
+	tests := []struct {
+		name  string
+		noDir bool
+		want  map[string]string
+	}{
+		{name: "yaml files only", want: map[string]string{"ci.yml": "on: push\n", "deploy.yaml": "on: release\n"}},
+		{name: "no workflows dir", noDir: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				const dir = "/repos/o/r/contents/.github/workflows"
+				switch r.URL.Path {
+				case dir:
+					if tt.noDir {
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					_, _ = w.Write([]byte(`[{"name":"ci.yml","type":"file"},{"name":"deploy.yaml","type":"file"},{"name":"README.md","type":"file"},{"name":"sub","type":"dir"}]`))
+				case dir + "/ci.yml":
+					// The API wraps base64 content every 60 characters.
+					_, _ = w.Write([]byte(`{"content":"b246IHB1c2gK\n"}`))
+				case dir + "/deploy.yaml":
+					_, _ = w.Write([]byte(`{"content":"b246IHJlbGVhc2UK"}`))
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer srv.Close()
+
+			c := New("tok")
+			c.BaseURL = srv.URL
+			got, err := c.Workflows(context.Background(), "o", "r")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d files, want %d", len(got), len(tt.want))
+			}
+			for name, src := range tt.want {
+				if string(got[name]) != src {
+					t.Errorf("%s = %q, want %q", name, got[name], src)
+				}
+			}
+		})
+	}
+}
+
+func TestDefaultWorkflowPermissions(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		resp    string
+		want    string
+		wantErr bool
+	}{
+		{name: "read", status: 200, resp: `{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}`, want: "read"},
+		{name: "write", status: 200, resp: `{"default_workflow_permissions":"write","can_approve_pull_request_reviews":true}`, want: "write"},
+		{name: "not admin", status: 403, resp: `{"message":"Must have admin rights"}`, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != "/repos/o/r/actions/permissions/workflow" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.resp))
+			}))
+			defer srv.Close()
+
+			c := New("tok")
+			c.BaseURL = srv.URL
+			got, err := c.DefaultWorkflowPermissions(context.Background(), "o", "r")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

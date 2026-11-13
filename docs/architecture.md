@@ -36,7 +36,7 @@ flowchart LR
 | Check status and logs | GitHub Actions (the job's own check run) |
 | VM lifecycle, runner registration loop, routing on/off | `localci` (`internal/runner`) |
 | GitHub API calls | `localci` (`internal/github`) |
-| `actions/cache` storage | `localci-cache` in the VM (`internal/cache`); artifacts are forwarded to GitHub ([research 006](research/006-local-actions-cache.md)) |
+| `actions/cache` storage | `localci-cache` in the VM (`internal/cache`); artifacts are forwarded to GitHub ([research 007](research/007-local-actions-cache.md)) |
 | Auth | `GH_TOKEN` or `gh auth token` (repo admin, [ADR 0002](decisions/0002-repo-admin.md)), in memory only |
 
 Everything goes over outbound HTTPS. There are no inbound ports, no webhooks and no LocalCI backend.
