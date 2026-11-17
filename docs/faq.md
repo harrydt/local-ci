@@ -16,6 +16,12 @@ No. The line looks up whoever triggered the run in `LOCALCI_RUNNERS`. Only peopl
 
 Yes. Registering and removing a runner needs repo admin on GitHub, and no token type gets around that on the Free plan. [Details](architecture.md#auth-and-permissions).
 
+## Which GitHub token does it use?
+
+By default, `localci up` borrows your `gh` token, which covers every repo you can see and doesn't expire. To give it a token for one repo only, run `bin/localci auth -repo owner/name` once. It opens GitHub's token page with the permissions filled in, asks you to pick the repo and paste the token, and keeps it in your macOS Keychain. When the token expires (90 days by default), run it again.
+
+Order: `GH_TOKEN` if it's set, then the repo's `localci auth` token, then your `gh` token, with a log line when it falls back to `gh`. An expired `localci auth` token stops `up` with a 401 instead of falling back.
+
 ## Is a green check from LocalCI trustworthy?
 
 It's as trustworthy as the person whose Mac ran it. A developer controls their own machine and can make any job report success. That's fine for your own feedback loop, and not fine as proof for someone else. Keep release and deploy jobs on hosted runners. [Security](security.md).
@@ -27,6 +33,18 @@ A routed job gets every secret it references, on your Mac, the same as any self-
 ## What happens when my Mac sleeps?
 
 Your jobs queue until it wakes, then run. GitHub fails a job that waits 24 hours. Short sleeps and network drops recover on their own. Stop `localci up` (Ctrl-C) before a long break and your jobs go back to hosted runners.
+
+## How much faster is it?
+
+One sample each, on a MacBook Air M2 with the VM at 4 vCPU and 6 GiB:
+
+| | ripgrep CI, 6 jobs, total | Go CPU-bound tests, one job |
+|---|---|---|
+| GitHub-hosted (2 vCPU x86 per job) | 79s | 57s |
+| LocalCI warm, 1 runner | 98s | 24s |
+| LocalCI warm, `-runners 3` | **64s** | — |
+
+Each job runs 1.5–4× faster locally. Whether the whole workflow is faster depends on how many jobs run in parallel (next question). `scripts/bench.sh` runs the same comparison on your own repo.
 
 ## Why is my workflow slower locally when every job is faster?
 
@@ -58,7 +76,7 @@ The clone itself is instant on APFS, and jobs run as fast because the clone star
 
 ## Does `actions/cache` go to GitHub?
 
-No, it stays on the VM's disk, which is much faster on a home connection. Artifacts still go to GitHub. Jobs that fall back to hosted runners use GitHub's cache, so the two caches don't share entries. Turn the local cache off with `localci setup -cache=false`.
+No. `actions/cache`, `setup-*` caches and BuildKit `type=gha` save and restore on the VM's disk: 30–200 MB takes under a second, instead of about 3s to restore and 12–80s to save through GitHub on a home connection. Workflows don't change. Artifacts still go to GitHub. Jobs that fall back to hosted runners use GitHub's cache, so the two caches don't share entries. Turn the local cache off with `localci setup -cache=false`.
 
 ## Can I run it in the background?
 
@@ -71,3 +89,16 @@ One repo at a time for now. Run a single `localci up` per VM: two processes woul
 ## Intel Macs, Linux or Windows?
 
 Not yet. LocalCI targets Apple Silicon Macs with Lima's `vz` VMs.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `runner not installed in VM` | `bin/localci setup` |
+| `local cache is on but not answering` | `bin/localci setup`, or turn it off with `bin/localci setup -cache=false` |
+| `unknown .../Runner.Worker.dll` during setup | The runner version changed: update both checksums in `scripts/install-cache.sh` |
+| `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
+| `HTTP 401` at startup | The `localci auth` token expired or was revoked: `bin/localci auth -repo owner/name` |
+| Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
+| An offline `localci-` runner stays listed in the repo's runner settings | `localci up` was stopped while it was registering the next runner. Delete it in Settings → Actions → Runners. A fix is planned |
+| A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |
