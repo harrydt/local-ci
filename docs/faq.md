@@ -84,7 +84,7 @@ Not built in yet. Run `localci up` in a terminal, tmux or similar. To stop idle 
 
 ## Does it work with more than one repo?
 
-One repo at a time for now. Run a single `localci up` per VM: two processes would share runner directories.
+One repo at a time for now. A second `localci up` on the same VM stops with `another localci up is using VM`, because two would share runner directories. For a second repo, create another VM with `localci setup -vm name` and run `localci up -vm name`.
 
 ## Intel Macs, Linux or Windows?
 

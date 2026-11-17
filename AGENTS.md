@@ -69,7 +69,7 @@ Setup and first run: [README → Get started](README.md#get-started). Use a test
 - Jobs fall back to hosted runners only when `localci up` exits cleanly. After SIGKILL, a crash or power loss, or while the Mac sleeps with `localci up` running, the user's jobs queue (up to 24h) until it's back. Short sleeps and network drops recover on their own; real lid-close sleep is untested.
 - The VM is ARM64. amd64-only tools and Docker images break or run under emulation.
 - The runner image is not GitHub's `ubuntu-latest` image, so preinstalled tools differ.
-- The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process, and one `localci up` per VM.
+- The VM persists between jobs (warm caches, but no clean slate). One repo per `localci up` process, and one `localci up` per VM (a lock file enforces it).
 - `actions/cache` uses the cache server in the VM (on by default). It relies on a one-byte patch to the pinned runner: a runner self-update silently sends caches back to GitHub, and a runner version bump needs new checksums in `scripts/install-cache.sh`. Jobs that fall back to hosted runners use GitHub's cache.
 - If `localci up` is killed mid-job, GitHub fails that job. The next session starts fresh.
 - A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.

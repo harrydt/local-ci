@@ -99,3 +99,25 @@ func TestTokenURL(t *testing.T) {
 		}
 	}
 }
+
+func TestLockVM(t *testing.T) {
+	dir := t.TempDir()
+	release, err := lockVM(dir, "localci")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lockVM(dir, "localci"); err == nil || !strings.Contains(err.Error(), "another localci up") {
+		t.Fatalf("second lock err = %v, want another localci up", err)
+	}
+	other, err := lockVM(dir, "other")
+	if err != nil {
+		t.Fatalf("lock for a different VM: %v", err)
+	}
+	other()
+	release()
+	again, err := lockVM(dir, "localci")
+	if err != nil {
+		t.Fatalf("lock after release: %v", err)
+	}
+	again()
+}
