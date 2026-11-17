@@ -143,13 +143,20 @@ func (a *Agent) session(ctx context.Context, log *slog.Logger, slot int) error {
 	dir := runnerDir(slot)
 	name := fmt.Sprintf("%s-%d-%d", a.Label, slot, time.Now().UnixNano())
 	start := time.Now()
-	cfg, err := a.GitHub.GenerateJITConfig(ctx, a.Owner, a.Repo, name, []string{a.Label})
+	// Ctrl-C must not cancel the request: GitHub may already have created the
+	// runner, and without the reply there's no ID to delete it by.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+	cfg, err := a.GitHub.GenerateJITConfig(rctx, a.Owner, a.Repo, name, []string{a.Label})
+	cancel()
 	if err != nil {
 		return fmt.Errorf("generate JIT config: %w", err)
 	}
 	log = log.With("runner", name, "runner_id", cfg.RunnerID)
 	log.Info("runner registered; waiting for job", "register_ms", time.Since(start).Milliseconds())
 	defer a.cleanup(log, dir, cfg.RunnerID)
+	if ctx.Err() != nil {
+		return nil
+	}
 
 	start = time.Now()
 	err = a.limactl(ctx, strings.NewReader(cfg.Encoded+"\n"), "shell", a.VM, "--", "bash", "-c", runScript(dir))
