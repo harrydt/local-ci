@@ -130,3 +130,7 @@ Conventions are in [AGENTS.md](AGENTS.md).
 ## Authors
 
 Harry Tran and Aatish Neupane.
+
+## License
+
+[MIT](LICENSE)
