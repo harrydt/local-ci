@@ -196,7 +196,7 @@ func splitRepo(repo string) (owner, name string, err error) {
 // keychainService names localci's Keychain items. The account is owner/name.
 const keychainService = "localci"
 
-// auth stores a fine-grained token for one repo in the Keychain (ADR 0003, R4).
+// auth stores a fine-grained token for one repo in the Keychain.
 // `security` prompts for the token itself, so it never passes through localci's
 // arguments, output or memory until up reads it back.
 func auth(args []string, stderr io.Writer) error {

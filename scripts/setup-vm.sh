@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates the LocalCI Lima VM and installs the GitHub Actions runner in it.
-# Safe to re-run. See docs/research/001-native-runner-spike.md.
+# Safe to re-run. See docs/architecture.md.
 set -euo pipefail
 
 VM=${VM:-localci}

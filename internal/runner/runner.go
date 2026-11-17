@@ -112,7 +112,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	<-ctx.Done()
 	// Unroute before the runners go away, so new jobs don't queue for them.
 	// ponytail: SIGKILL or a crash skips this and leaves jobs queued until the
-	// next localci up; a scheduled sweep would need a backend (ADR 0002).
+	// next localci up; a scheduled sweep would need a backend.
 	uctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cancel()
 	if err := a.GitHub.SetRoute(uctx, a.Owner, a.Repo, a.Login, ""); err != nil {
