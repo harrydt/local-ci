@@ -32,7 +32,7 @@ Everyone who runs `localci up` is a repo admin ([why](architecture.md#auth-and-p
 
 ## Not covered yet
 
-- One job affecting the next. That needs a fresh VM per job.
+- One job affecting the next. That needs a fresh VM per job: about 10s extra per job, and caches no longer carry over ([details](faq.md#is-the-vm-fresh-for-every-job)).
 - Results others can rely on. Ideas: re-run a random sample of local jobs on hosted runners and flag disagreements, or sign results into a transparency log.
 
 ## Reporting a vulnerability

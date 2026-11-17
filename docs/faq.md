@@ -46,6 +46,16 @@ The VM is plain ARM64 Ubuntu 24.04, not GitHub's runner image, which ships hundr
 
 No. It persists, which is where the warm-run speedup comes from, but one job can leave state for the next. Each runner slot has its own working directory and `HOME`.
 
+A fresh VM per job (a copy-on-write clone of a stopped VM, deleted afterwards) has been measured but not built:
+
+| | Fresh clone | Shared VM (today) |
+|---|---|---|
+| `localci up` to runner registered | 12–15s | 3s |
+| Go CPU-bound job | 24s | 23–24s |
+| Go job with `services: postgres` | 17–20s | 18–19s |
+
+The clone itself is instant on APFS, and jobs run as fast because the clone starts with the stopped VM's caches. The cost is about 10s of boot per job, one VM (6 GiB) per runner slot, and caches that stop building up: anything a job saves is deleted with its clone. That last part is the point. A cache that carries over from one job to the next is also a way for one job to poison the next.
+
 ## Does `actions/cache` go to GitHub?
 
 No, it stays on the VM's disk, which is much faster on a home connection. Artifacts still go to GitHub. Jobs that fall back to hosted runners use GitHub's cache, so the two caches don't share entries. Turn the local cache off with `localci setup -cache=false`.

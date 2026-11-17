@@ -97,6 +97,7 @@ Each job runs 1.5–4× faster locally, but hosted runs every job on its own mac
 | `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
 | `HTTP 401` at startup | The `localci auth` token expired or was revoked: `bin/localci auth -repo owner/name` |
 | Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
+| An offline `localci-` runner stays listed in the repo's runner settings | `localci up` was stopped while it was registering the next runner. Delete it in Settings → Actions → Runners. A fix is planned |
 | A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |
 
 More in the [FAQ](docs/faq.md).
