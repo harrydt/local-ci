@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/teeplabs/localci/internal/github"
+	"github.com/harrydt/local-ci/internal/github"
 )
 
 // fakeGitHub counts JIT registrations and deletions, and records the

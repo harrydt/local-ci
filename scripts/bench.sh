@@ -9,8 +9,8 @@
 # run; the original value is restored on exit.
 #
 # usage: scripts/bench.sh owner/repo workflow-file [ref]
-#   e.g. scripts/bench.sh TeepLabs/localci-bench go-cpu.yml
-#        scripts/bench.sh TeepLabs/bench-ripgrep bench.yml master
+#   e.g. scripts/bench.sh octo-org/hello ci.yml
+#        scripts/bench.sh octo-org/ripgrep bench.yml master
 set -euo pipefail
 
 REPO=${1:?usage: bench.sh owner/repo workflow-file [ref]}

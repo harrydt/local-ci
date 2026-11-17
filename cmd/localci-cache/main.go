@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/teeplabs/localci/internal/cache"
+	"github.com/harrydt/local-ci/internal/cache"
 )
 
 func main() {

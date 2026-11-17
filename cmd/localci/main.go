@@ -19,10 +19,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/teeplabs/localci/internal/github"
-	"github.com/teeplabs/localci/internal/runner"
-	"github.com/teeplabs/localci/internal/workflow"
-	"github.com/teeplabs/localci/scripts"
+	"github.com/harrydt/local-ci/internal/github"
+	"github.com/harrydt/local-ci/internal/runner"
+	"github.com/harrydt/local-ci/internal/workflow"
+	"github.com/harrydt/local-ci/scripts"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".

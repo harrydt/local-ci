@@ -88,12 +88,12 @@ func TestGithubToken(t *testing.T) {
 }
 
 func TestTokenURL(t *testing.T) {
-	u, err := url.Parse(tokenURL("TeepLabs/localci-bench"))
+	u, err := url.Parse(tokenURL("octo-org/hello"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	for k, v := range map[string]string{"target_name": "TeepLabs", "administration": "write", "actions_variables": "write", "contents": "read", "name": "localci TeepLabs/localci-bench"} {
+	for k, v := range map[string]string{"target_name": "octo-org", "administration": "write", "actions_variables": "write", "contents": "read", "name": "localci octo-org/hello"} {
 		if q.Get(k) != v {
 			t.Errorf("%s = %q, want %q", k, q.Get(k), v)
 		}

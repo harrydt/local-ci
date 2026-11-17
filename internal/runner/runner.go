@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/teeplabs/localci/internal/github"
+	"github.com/harrydt/local-ci/internal/github"
 )
 
 // runScript reads the JIT config from stdin so it never appears in argv on the host.
