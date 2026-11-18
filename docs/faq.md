@@ -36,19 +36,27 @@ Your jobs queue until it wakes, then run. GitHub fails a job that waits 24 hours
 
 ## How much faster is it?
 
-One sample each, on a MacBook Air M2 with the VM at 4 vCPU and 6 GiB:
+Measured on 2026-11-17, one sample each. Total is from the first job queued to the last job done.
 
-| | ripgrep CI, 6 jobs, total | Go CPU-bound tests, one job |
+- **Mac:** MacBook Air M2 (8 cores: 4 performance, 4 efficiency), 16 GB RAM, macOS 26.
+- **VM:** 4 vCPU and 6 GiB (the `localci setup` default), Lima 2.2.1 with `vz`, runner 2.338.2.
+- **Hosted:** `ubuntu-latest`, 2 vCPU x86 per job.
+
+| | ripgrep CI, 6 jobs | Go CPU-bound tests, 1 job |
 |---|---|---|
-| GitHub-hosted (2 vCPU x86 per job) | 79s | 57s |
-| LocalCI warm, 1 runner | 98s | 24s |
-| LocalCI warm, `-runners 3` | **64s** | — |
+| GitHub-hosted | 73s, 102s (two runs) | 94s |
+| LocalCI, 1 runner, warm | 107s | **23s** |
+| LocalCI, 3 runners, warm | **76s** | — |
+| LocalCI, 1 runner, cold | 189s | 38s |
+| LocalCI, 3 runners, cold | 107s | — |
 
-Each job runs 1.5–4× faster locally. Whether the whole workflow is faster depends on how many jobs run in parallel (next question). `scripts/bench.sh` runs the same comparison on your own repo.
+*Warm* reuses the toolchains and caches earlier jobs left in the VM, as everyday use does. *Cold* wipes them first, so jobs download Rust or Go again.
+
+Each job runs about 2–4× faster locally. Whether the whole workflow is faster depends on how many jobs run in parallel (next question). `scripts/bench.sh` runs the same comparison on your own repo.
 
 ## Why is my workflow slower locally when every job is faster?
 
-Hosted runs each job on its own machine at the same time, so the workflow takes as long as its slowest job. One local runner runs the jobs one after another, so the workflow takes the sum, plus a few seconds per job to register the next runner. In the ripgrep benchmark, every job was 1.5–4× faster locally, but six of them in a row took 98s against hosted's 79s. With `-runners 3` it took 64s. [Timeline](diagrams.md#one-runner-vs-several).
+Hosted runs each job on its own machine at the same time, so the workflow takes as long as its slowest job. One local runner runs the jobs one after another, so the workflow takes the sum, plus a few seconds per job to register the next runner. In the ripgrep benchmark, every job was faster locally, but six of them in a row took 107s against hosted's 73–102s. With `-runners 3` it took 76s. [Timeline](diagrams.md#one-runner-vs-several).
 
 Rule of thumb: one big job (common for Go and Node repos) wins outright. Many parallel jobs need `-runners N`, and enough CPUs in the VM to go round.
 

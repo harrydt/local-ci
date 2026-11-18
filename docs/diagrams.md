@@ -144,7 +144,7 @@ flowchart LR
 
 ## One runner vs several
 
-ripgrep's six CI jobs, in seconds after the run was queued. Hosted gives each job its own machine, so the workflow takes as long as its slowest job. One local runner does the jobs one after another. Three runners close the gap.
+ripgrep's six CI jobs from an earlier run, in seconds after the run was queued. Hosted gives each job its own machine, so the workflow takes as long as its slowest job. One local runner does the jobs one after another. Three runners close the gap.
 
 ```mermaid
 gantt
