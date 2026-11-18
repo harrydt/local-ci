@@ -2,6 +2,7 @@
 
 Every LocalCI diagram in one place. The prose behind them is in [architecture](architecture.md) and [security](security.md).
 
+- [Overview](#overview)
 - [Components](#components)
 - [Job lifecycle](#job-lifecycle)
 - [Routing](#routing)
@@ -9,6 +10,18 @@ Every LocalCI diagram in one place. The prose behind them is in [architecture](a
 - [Local Actions cache](#local-actions-cache)
 - [Trust boundary](#trust-boundary)
 - [One runner vs several](#one-runner-vs-several)
+
+## Overview
+
+Who runs a job. GitHub still dispatches it and writes the check.
+
+```mermaid
+flowchart LR
+  dev([git push]) --> GH[GitHub Actions]
+  GH -- "your jobs, while localci up runs" --> VM["Lima VM on your Mac<br/>ephemeral actions/runner"]
+  GH -- "everyone else, or you when it's stopped" --> Hosted[GitHub-hosted runner]
+  VM -- "logs + result" --> GH --> Check["✅ / ❌ check on the commit"]
+```
 
 ## Components
 

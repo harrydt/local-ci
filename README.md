@@ -2,13 +2,7 @@
 
 Run your existing GitHub Actions jobs on your own Apple Silicon Mac and get the same green or red check on GitHub.
 
-```mermaid
-flowchart LR
-  dev([git push]) --> GH[GitHub Actions]
-  GH -- "your jobs, while localci up runs" --> VM["Lima VM on your Mac<br/>ephemeral actions/runner"]
-  GH -- "everyone else, or you when it's stopped" --> Hosted[GitHub-hosted runner]
-  VM -- "logs + result" --> GH --> Check["✅ / ❌ check on the commit"]
-```
+![localci up running local-ci's own CI on a Mac: the runner picks up the job, it succeeds, and gh shows the green check](docs/demo.gif)
 
 GitHub still dispatches the job and writes the check, so branch protection works as usual. LocalCI only provides the machine: one Go binary that runs GitHub's official runner in a Linux VM. No server, no GitHub App.
 
