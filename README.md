@@ -6,7 +6,7 @@ Run your existing GitHub Actions jobs on your own Apple Silicon Mac and get the 
 
 GitHub still dispatches the job and writes the check, so branch protection works as usual. LocalCI only provides the machine: one Go binary that runs GitHub's official runner in a Linux VM. No server, no GitHub App.
 
-Jobs run 1.5–4× faster than on a hosted runner, and `actions/cache` stays on your disk. [Benchmarks](docs/faq.md#how-much-faster-is-it).
+Jobs run about 2–4× faster than on a hosted runner, and `actions/cache` stays on your disk. [Benchmarks](docs/faq.md#how-much-faster-is-it).
 
 ## Get started
 
