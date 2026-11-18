@@ -101,6 +101,15 @@ func up(args []string, stderr io.Writer, logger *slog.Logger) error {
 	if *runners < 1 {
 		return fmt.Errorf("-runners must be at least 1, got %d", *runners)
 	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	release, err := lockVM(filepath.Join(cache, "localci"), *vm)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	// SIGHUP too: closing the terminal must unroute, or jobs queue for a dead runner.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
@@ -191,6 +200,24 @@ func splitRepo(repo string) (owner, name string, err error) {
 		return "", "", fmt.Errorf("-repo must be owner/name, got %q", repo)
 	}
 	return owner, name, nil
+}
+
+// lockVM makes sure only one localci up uses a VM: two would share runner
+// directories and kill each other's runners. The OS drops the lock when the
+// process exits, even on SIGKILL.
+func lockVM(dir, vm string) (release func(), err error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, vm+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("another localci up is using VM %q; stop it first, or use another VM (localci setup -vm name, then localci up -vm name)", vm)
+	}
+	return func() { f.Close() }, nil
 }
 
 // keychainService names localci's Keychain items. The account is owner/name.

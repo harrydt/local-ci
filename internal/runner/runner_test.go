@@ -23,6 +23,7 @@ type fakeGitHub struct {
 	mu                 sync.Mutex
 	registered, delete int
 	failRegister       bool
+	onRegister         func() // runs while GitHub handles a registration
 	routes             []string
 }
 
@@ -52,6 +53,9 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	case r.Method == http.MethodPost:
 		f.registered++
+		if f.onRegister != nil {
+			f.onRegister()
+		}
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"runner":{"id":9},"encoded_jit_config":"jit-secret"}`))
 	case r.Method == http.MethodDelete:
@@ -175,6 +179,31 @@ func TestRunParallel(t *testing.T) {
 	}
 	if len(killed) != 2 || killed[0] == killed[1] {
 		t.Errorf("kill scripts = %q, want one per runner directory", killed)
+	}
+}
+
+// Ctrl-C while GitHub creates the runner must still delete it: GitHub keeps a
+// runner it created even if localci stops waiting for the reply.
+func TestRunDeletesRunnerRegisteredDuringCtrlC(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gh := &fakeGitHub{onRegister: cancel}
+	ran := false
+	agent := newAgent(t, gh, func(_ context.Context, _ io.Reader, args ...string) error {
+		if len(args) > 5 && strings.Contains(args[5], "exec ./run.sh") {
+			ran = true
+		}
+		return nil
+	})
+
+	if err := agent.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if gh.registered != 1 || gh.delete != 1 {
+		t.Errorf("registered=%d deleted=%d, want 1 and 1", gh.registered, gh.delete)
+	}
+	if ran {
+		t.Error("runner started after Ctrl-C")
 	}
 }
 

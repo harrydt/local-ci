@@ -84,7 +84,7 @@ Not built in yet. Run `localci up` in a terminal, tmux or similar. To stop idle 
 
 ## Does it work with more than one repo?
 
-One repo at a time for now. Run a single `localci up` per VM: two processes would share runner directories.
+One repo at a time for now. A second `localci up` on the same VM stops with `another localci up is using VM`, because two would share runner directories. For a second repo, create another VM with `localci setup -vm name` and run `localci up -vm name`.
 
 ## Intel Macs, Linux or Windows?
 
@@ -100,5 +100,4 @@ Not yet. LocalCI targets Apple Silicon Macs with Lima's `vz` VMs.
 | `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
 | `HTTP 401` at startup | The `localci auth` token expired or was revoked: `bin/localci auth -repo owner/name` |
 | Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
-| An offline `localci-` runner stays listed in the repo's runner settings | `localci up` was stopped while it was registering the next runner. Delete it in Settings → Actions → Runners. A fix is planned |
 | A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |
