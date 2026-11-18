@@ -53,6 +53,17 @@ if ! limactl shell "$VM" -- id -nG | grep -qw docker; then
 fi
 limactl shell "$VM" -- docker version --format 'docker {{.Server.Version}} installed'
 
+# With -runners N, jobs share this VM's apt, and a second `apt-get update` fails
+# on the first one's lock (hosted jobs each get a machine). sudo finds these
+# wrappers before /usr/bin, so apt calls wait their turn instead.
+# ponytail: only covers apt and apt-get found on PATH; unattended-upgrades can
+# still hold the lock. Disable its timers if that bites.
+# shellcheck disable=SC2016 # expands in the VM
+limactl shell "$VM" -- bash -ec 'for c in apt-get apt; do
+  printf "#!/bin/sh\n# localci: one apt at a time; jobs share this VM.\nexec flock /run/lock/localci-apt /usr/bin/%s \"\$@\"\n" "$c" | sudo tee "/usr/local/sbin/$c" >/dev/null
+  sudo chmod 755 "/usr/local/sbin/$c"
+done'
+
 # Local Actions cache (scripts/install-cache.sh): a cache server in the VM and a
 # one-byte runner patch, so actions/cache saves and restores on the VM's disk
 # instead of over the Mac's internet link. localci setup passes the server
