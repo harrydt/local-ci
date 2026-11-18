@@ -58,7 +58,7 @@ Yes, Docker is installed in the VM. Images must have ARM64 builds, because there
 
 ## Why does a tool that's on `ubuntu-latest` fail?
 
-The VM is plain ARM64 Ubuntu 24.04, not GitHub's runner image, which ships hundreds of preinstalled tools. Install what you need in a step, or use a `setup-*` action. Those cache their downloads in the VM, so it costs time only once.
+The VM is ARM64 Ubuntu 24.04 with Docker and `build-essential` (make, gcc, g++) added, not GitHub's runner image, which ships hundreds of preinstalled tools. Install what you need in a step, or use a `setup-*` action. Those cache their downloads in the VM, so it costs time only once.
 
 ## Is the VM fresh for every job?
 

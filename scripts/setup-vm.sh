@@ -53,6 +53,14 @@ if ! limactl shell "$VM" -- id -nG | grep -qw docker; then
 fi
 limactl shell "$VM" -- docker version --format 'docker {{.Server.Version}} installed'
 
+# make, gcc and g++: GitHub's hosted image has them and most CI scripts assume
+# them; the Ubuntu cloud image doesn't.
+limactl shell "$VM" -- bash -ec 'if ! command -v make >/dev/null || ! command -v g++ >/dev/null; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential >/dev/null
+fi
+echo "build tools installed"'
+
 # With -runners N, jobs share this VM's apt, and a second `apt-get update` fails
 # on the first one's lock (hosted jobs each get a machine). sudo finds these
 # wrappers before /usr/bin, so apt calls wait their turn instead.
