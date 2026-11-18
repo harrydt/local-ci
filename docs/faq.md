@@ -36,7 +36,7 @@ Your jobs queue until it wakes, then run. GitHub fails a job that waits 24 hours
 
 ## How much faster is it?
 
-Measured on 2026-11-17, one sample each. Total is from the first job queued to the last job done.
+Measured on 2026-11-17, one sample each, while the Mac was in normal use (browser, editor and so on), not idle. Total is from the first job queued to the last job done.
 
 - **Mac:** MacBook Air M2 (8 cores: 4 performance, 4 efficiency), 16 GB RAM, macOS 26.
 - **VM:** 4 vCPU and 6 GiB (the `localci setup` default), Lima 2.2.1 with `vz`, runner 2.338.2.
