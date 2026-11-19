@@ -18,7 +18,7 @@ Yes. Registering and removing a runner needs repo admin on GitHub, and no token 
 
 ## Which GitHub token does it use?
 
-By default, `localci up` borrows your `gh` token, which covers every repo you can see and doesn't expire. To give it a token for one repo only, run `bin/localci auth -repo owner/name` once. It opens GitHub's token page with the permissions filled in, asks you to pick the repo and paste the token, and keeps it in your macOS Keychain. When the token expires (90 days by default), run it again.
+By default, `localci up` borrows your `gh` token, which covers every repo you can see and doesn't expire. To give it a token for one repo only, run `localci auth -repo owner/name` once. It opens GitHub's token page with the permissions filled in, asks you to pick the repo and paste the token, and keeps it in your macOS Keychain. When the token expires (90 days by default), run it again.
 
 Order: `GH_TOKEN` if it's set, then the repo's `localci auth` token, then your `gh` token, with a log line when it falls back to `gh`. An expired `localci auth` token stops `up` with a 401 instead of falling back.
 
@@ -88,7 +88,7 @@ No. `actions/cache`, `setup-*` caches and BuildKit `type=gha` save and restore o
 
 ## Can I run it in the background?
 
-Not built in yet. Run `localci up` in a terminal, tmux or similar. To stop idle sleep while it runs, use `caffeinate -i bin/localci up -repo owner/name`.
+Not built in yet. Run `localci up` in a terminal, tmux or similar. To stop idle sleep while it runs, use `caffeinate -i localci up -repo owner/name`.
 
 ## Does it work with more than one repo?
 
@@ -102,10 +102,10 @@ Not yet. LocalCI targets Apple Silicon Macs with Lima's `vz` VMs.
 
 | Symptom | Fix |
 |---|---|
-| `runner not installed in VM` | `bin/localci setup` |
-| `local cache is on but not answering` | `bin/localci setup`, or turn it off with `bin/localci setup -cache=false` |
+| `runner not installed in VM` | `localci setup` |
+| `local cache is on but not answering` | `localci setup`, or turn it off with `localci setup -cache=false` |
 | `unknown .../Runner.Worker.dll` during setup | The runner version changed: update both checksums in `scripts/install-cache.sh` |
 | `HTTP 403` from `generate-jitconfig` | You need admin on the repo |
-| `HTTP 401` at startup | The `localci auth` token expired or was revoked: `bin/localci auth -repo owner/name` |
+| `HTTP 401` at startup | The `localci auth` token expired or was revoked: `localci auth -repo owner/name` |
 | Your job sits in `queued` | Is `localci up` running and awake? If it was killed with `kill -9`, start it again, or remove yourself from `LOCALCI_RUNNERS` |
 | A tool is missing in the job | The VM is ARM64 Ubuntu, not GitHub's image. Install the tool in a step, or use a `setup-*` action |

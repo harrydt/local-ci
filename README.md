@@ -13,11 +13,11 @@ Jobs run about 2–4× faster than on a hosted runner, and `actions/cache` stays
 You need an Apple Silicon Mac, Lima 2.3 or later, and admin on the repo.
 
 ```sh
-brew install go lima gh && gh auth login
-git clone https://github.com/harrydt/local-ci.git && cd local-ci
-make build
-bin/localci setup     # creates the VM (a few minutes, once)
+brew install harrydt/tap/localci gh && gh auth login
+localci setup     # creates the VM (a few minutes, once)
 ```
+
+Or build from source: `git clone https://github.com/harrydt/local-ci.git && cd local-ci && make build`, then use `bin/localci`.
 
 Opt a job in by changing its `runs-on`:
 
@@ -28,7 +28,7 @@ runs-on: ${{ fromJSON(vars.LOCALCI_RUNNERS || '{}')[github.actor] || 'ubuntu-lat
 Then run:
 
 ```sh
-bin/localci up -repo owner/name     # add -runners 2 to run two jobs at once
+localci up -repo owner/name     # add -runners 2 to run two jobs at once
 ```
 
 Your pushes now run on your Mac, and everyone else's still run on `ubuntu-latest`. Ctrl-C sends yours back too.
