@@ -182,6 +182,10 @@ func setup(args []string, stderr io.Writer) error {
 	if *useCache {
 		cacheState = "on"
 		if exe, err := os.Executable(); err == nil {
+			// Homebrew links bin/localci to libexec/localci; the cache binary is next to the target.
+			if real, err := filepath.EvalSymlinks(exe); err == nil {
+				exe = real
+			}
 			cacheBin = filepath.Join(filepath.Dir(exe), "localci-cache-linux-arm64")
 		}
 	}
