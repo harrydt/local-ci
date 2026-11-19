@@ -75,3 +75,10 @@ Setup and first run: [README → Get started](README.md#get-started). Use a test
 - A job running during a network drop fails if a step needs the network, including the `docker pull` the runner always does for `services:`.
 - `-runners N` runs N jobs at once (default 1), each from its own runner directory (`~/actions-runner`, `~/actions-runner-2`, ...) with its own `HOME` (`<dir>/_home`) and tool cache, like separate hosted machines. They share the VM's CPU, memory and Docker.
 - Docker is installed in the VM. `services:`, `container:` jobs and Docker container actions work. Images need ARM64 builds: amd64-only images fail, because there's no emulation. Docker state persists between jobs and is pruned when the VM disk passes 80%.
+
+## Releasing
+
+1. `gh release create vX.Y.Z --target <full sha on main>` with short notes.
+2. `curl -fsSL https://github.com/harrydt/local-ci/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256`.
+3. In [harrydt/homebrew-tap](https://github.com/harrydt/homebrew-tap), update `url` and `sha256` in `Formula/localci.rb`, commit `localci X.Y.Z`, push.
+4. Check: `brew upgrade localci && brew test localci && brew audit --strict --online harrydt/tap/localci && localci setup` (it must print `local cache on`).
